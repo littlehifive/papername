@@ -21,3 +21,6 @@ Papername is a Chrome extension that gives downloaded academic PDFs useful filen
 - After explicit gist consent, a DOI may be sent to Crossref to fill missing metadata.
 - Paper content is never persisted by the backend or telemetry pipeline.
 - A download waits at most 1.5 seconds for a gist before falling back.
+- A recognized Adobe Acrobat handoff may use the active supported PDF tab URL
+  locally to restore source identity; this URL is never persisted as an outcome
+  or sent in telemetry.

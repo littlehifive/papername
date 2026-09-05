@@ -69,6 +69,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Extract paper metadata from citation/Dublin Core meta elements, `ScholarlyArticle` JSON-LD, and narrowly scoped site adapters. Use DOI, arXiv, or PubMed metadata lookup only when page metadata is insufficient.
 - Request content access only for JSTOR, ScienceDirect/Elsevier, SpringerLink, Wiley, SAGE, Taylor & Francis, APA PsycNet, PubMed/PMC, arXiv, ACM Digital Library, and IEEE Xplore.
 - Associate downloads through known PDF URLs, identifiers, referrer/source relationships, and a short-lived per-tab article context. Never use a stale article context solely because it was the most recently visited page.
+- When Adobe Acrobat rewrites a PDF save to its extension origin and a UUID filename, recover identity from the active supported HTTP(S) PDF tab and then apply the same known-URL or identifier checks. Do not use the active tab as evidence for ordinary downloads.
 - Act only on PDFs confidently associated with a paper. Keep supplementary or ambiguous downloads unchanged.
 - In gist mode, start a request when the user initiates a recognized PDF action or when an eligible download begins. Hold filename determination for at most 1.5 seconds, then cancel locally and fall back.
 - Generate gists from title and abstract only. Require 6–12 English words, no author/year duplication, no path punctuation, no terminal sentence punctuation, no unsupported causal upgrade, and a faithful main reported result or contribution. Return `usable: false` when the abstract is insufficient.

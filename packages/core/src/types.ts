@@ -57,6 +57,8 @@ export interface DownloadCandidate {
   url: string;
   finalUrl?: string;
   referrer?: string;
+  /** Original HTTPS PDF page when a trusted viewer rewrites the download URL. */
+  viewerUrl?: string;
   filename: string;
   mime?: string;
   tabId?: number;

@@ -72,7 +72,7 @@ Use an ordinary Chrome profile with no other download-renaming extension. For ea
 | ACM Digital Library  | ☐                    | ☐                | ☐                    |            |
 | IEEE Xplore          | ☐                    | ☐                | ☐                    |            |
 
-Also verify disabled mode, duplicate-name uniquifying, Save As behavior, missing abstract fallback, invalid invite, exhausted quota, provider outage, explicit gist consent, and telemetry opt-out.
+Also verify disabled mode, duplicate-name uniquifying, Save As behavior (including Adobe Acrobat's Chrome PDF viewer when installed), missing abstract fallback, invalid invite, exhausted quota, provider outage, explicit gist consent, and telemetry opt-out.
 
 ## 6. Operate the two-week beta
 

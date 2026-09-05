@@ -36,7 +36,7 @@ function canonicalUrl(value: string | undefined): string | undefined {
 }
 
 function candidateUrls(download: DownloadCandidate): string[] {
-  const direct = [download.url, download.finalUrl].filter(
+  const direct = [download.url, download.finalUrl, download.viewerUrl].filter(
     (value): value is string => Boolean(value),
   );
   const nested: string[] = [];
@@ -90,7 +90,12 @@ function containsIdentifier(
   context: ArticleContext,
   download: DownloadCandidate,
 ): boolean {
-  const haystack = [download.url, download.finalUrl, download.referrer]
+  const haystack = [
+    download.url,
+    download.finalUrl,
+    download.referrer,
+    download.viewerUrl,
+  ]
     .map(searchableUrl)
     .join(" ");
   const identifiers = [

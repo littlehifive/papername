@@ -17,6 +17,7 @@ import {
   saveLastOutcome,
   updateSettings,
 } from "../src/storage";
+import { attachTrustedViewerUrl, isAdobeAcrobatDownload } from "../src/viewer";
 
 interface ContextMessage {
   type: "papername:context";
@@ -116,13 +117,20 @@ export default defineBackground(() => {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     void (async () => {
       try {
-        const download: DownloadCandidate = {
+        let download: DownloadCandidate = {
           url: item.url,
           ...(item.finalUrl ? { finalUrl: item.finalUrl } : {}),
           ...(item.referrer ? { referrer: item.referrer } : {}),
           filename: item.filename,
           ...(item.mime ? { mime: item.mime } : {}),
         };
+        if (isAdobeAcrobatDownload(download)) {
+          const [activeTab] = await chrome.tabs.query({
+            active: true,
+            lastFocusedWindow: true,
+          });
+          download = attachTrustedViewerUrl(download, activeTab?.url);
+        }
         if (!isLikelyPdfDownload(download)) {
           suggest();
           return;

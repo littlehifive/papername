@@ -7,6 +7,7 @@ import type {
 } from "@papername/core";
 
 import { decideDownload, type ExtensionSettings } from "../src/decision";
+import { attachTrustedViewerUrl } from "../src/viewer";
 
 const now = Date.UTC(2026, 8, 4, 12);
 const metadata: PaperMetadata = {
@@ -43,6 +44,91 @@ const settings: ExtensionSettings = {
 };
 
 describe("download decision", () => {
+  it("renames an Acrobat-mediated arXiv save using the active PDF viewer URL", async () => {
+    const arxivContext: ArticleContext = {
+      metadata: {
+        title:
+          "FLY-EVAL++: An Evidence-Driven Evaluation Protocol for Safety-Constrained Flight Prediction with Large Language Models",
+        authors: [
+          { name: "Wu, Yalun", familyName: "Wu" },
+          { name: "Fang, Junfeng", familyName: "Fang" },
+          { name: "Wang, Jiawei", familyName: "Wang" },
+        ],
+        year: "2026",
+        identifiers: { arxivId: "2609.04021" },
+        pdfUrls: ["https://arxiv.org/pdf/2609.04021"],
+      },
+      pageUrl: "https://arxiv.org/abs/2609.04021",
+      capturedAt: now - 100,
+      tabId: 4,
+    };
+    const acrobatDownload = attachTrustedViewerUrl(
+      {
+        url: "chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/",
+        filename: "292b7576-a42f-4ef1-87dc-066d96f55a95.pdf",
+        mime: "application/pdf",
+      },
+      "https://arxiv.org/pdf/2609.04021",
+    );
+
+    await expect(
+      decideDownload({
+        contexts: [arxivContext],
+        download: acrobatDownload,
+        settings,
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({
+      suggestion: "Wu et al. (2026).pdf",
+      outcome: "renamed",
+    });
+  });
+
+  it("does not attach active-page evidence to an arbitrary download", () => {
+    expect(
+      attachTrustedViewerUrl(
+        {
+          url: "https://unrelated.test/file.pdf",
+          filename: "file.pdf",
+          mime: "application/pdf",
+        },
+        "https://arxiv.org/pdf/2609.04021",
+      ),
+    ).not.toHaveProperty("viewerUrl");
+  });
+
+  it("associates a versioned arXiv viewer URL by its identifier", async () => {
+    const arxivContext: ArticleContext = {
+      metadata: {
+        title: "A paper with a versioned viewer URL",
+        authors: [{ name: "Yalun Wu", familyName: "Wu" }],
+        year: "2026",
+        identifiers: { arxivId: "2609.04021" },
+        pdfUrls: ["https://arxiv.org/pdf/2609.04021"],
+      },
+      pageUrl: "https://arxiv.org/abs/2609.04021",
+      capturedAt: now - 100,
+      tabId: 4,
+    };
+    const acrobatDownload = attachTrustedViewerUrl(
+      {
+        url: "blob:chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/id",
+        filename: "generated-id.pdf",
+        mime: "application/pdf",
+      },
+      "https://arxiv.org/pdf/2609.04021v1",
+    );
+
+    await expect(
+      decideDownload({
+        contexts: [arxivContext],
+        download: acrobatDownload,
+        settings,
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({ suggestion: "Wu (2026).pdf" });
+  });
+
   it("returns the selected deterministic filename for an eligible download", async () => {
     await expect(
       decideDownload({
