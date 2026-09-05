@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Papername privacy</title>
+    <style>
+      body {
+        color: #17211b;
+        font:
+          17px/1.6 system-ui,
+          sans-serif;
+        margin: 60px auto;
+        max-width: 720px;
+        padding: 0 24px;
+      }
+      h1,
+      h2 {
+        font-family: Georgia, serif;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Papername beta privacy</h1>
+    <p>
+      Papername reads bibliographic metadata on supported academic article pages
+      solely to name the PDF you download.
+    </p>
+    <h2>Local presets</h2>
+    <p>
+      Citation and title filenames are generated entirely in your browser.
+      Papername does not inspect your Downloads folder or retain a download
+      library.
+    </p>
+    <h2>Hosted gist preset</h2>
+    <p>
+      After explicit consent, Papername sends only a paper's title and abstract
+      to the Papername API. It does not send the PDF, DOI, page URL, authors, or
+      filename. The Papername backend does not persist the title, abstract, or
+      generated gist.
+    </p>
+    <p>
+      If a page supplies a DOI but omits information needed for the gist,
+      Papername may send that DOI to Crossref to fill the missing bibliographic
+      fields. It does not send the PDF to Crossref.
+    </p>
+    <p>
+      The AI provider does not use API inputs to train its models by default.
+      Under its standard controls, prompts and responses may appear in
+      abuse-monitoring logs for up to 30 days.
+    </p>
+    <h2>Optional telemetry</h2>
+    <p>
+      If you opt in, Papername records aggregate counts for preset selection,
+      rename outcome, fallback reason, latency bucket, and extension version. It
+      does not include paper content, identifiers, URLs, filenames, or an
+      installation identifier.
+    </p>
+    <h2>Beta access</h2>
+    <p>
+      Your invite is exchanged for a random access token. Only cryptographic
+      hashes of invite codes and access tokens are stored. Monthly usage counts
+      are attached to the token hash to enforce the beta allowance.
+    </p>
+  </body>
+</html>

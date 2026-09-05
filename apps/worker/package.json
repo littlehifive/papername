@@ -1,0 +1,23 @@
+{
+  "name": "@papername/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "invites": "node scripts/generate-invites.mjs",
+    "test:d1": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@papername/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.4",
+    "@cloudflare/workers-types": "^5.20260905.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.129.0"
+  }
+}

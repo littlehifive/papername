@@ -1,0 +1,13 @@
+name = "papername-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-04"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "papername-beta"
+database_id = "replace-with-production-database-id"
+migrations_dir = "migrations"
+
+[vars]
+ALLOWED_EXTENSION_ORIGINS = "chrome-extension://replace-with-store-extension-id,http://localhost:3000"
+OPENAI_MODEL = "gpt-5.6-luna"

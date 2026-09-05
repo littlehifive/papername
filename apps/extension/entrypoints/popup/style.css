@@ -1,0 +1,160 @@
+:root {
+  color: #17211b;
+  background: #f5f3eb;
+  font:
+    14px/1.4 Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 360px;
+}
+main {
+  padding: 18px;
+}
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+h1 {
+  font-family: Georgia, serif;
+  font-size: 25px;
+  margin: 0;
+  letter-spacing: -0.4px;
+}
+h2 {
+  font-family: Georgia, serif;
+}
+p {
+  margin: 3px 0 0;
+  color: #59635c;
+}
+section {
+  margin: 14px 0;
+}
+label,
+section > span {
+  color: #4c5750;
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: 6px;
+}
+select,
+input,
+button {
+  font: inherit;
+}
+select,
+input {
+  background: #fff;
+  border: 1px solid #c9cec9;
+  border-radius: 8px;
+  padding: 9px 10px;
+  width: 100%;
+}
+button {
+  background: #23543a;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  padding: 9px 12px;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.secondary {
+  background: #e4e8e2;
+  color: #203429;
+  width: 100%;
+}
+.row {
+  display: flex;
+  gap: 8px;
+}
+.row button {
+  width: auto;
+}
+.switch {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin: 3px 0 0;
+}
+.switch input {
+  width: auto;
+}
+.status {
+  background: #ebece5;
+  border-radius: 10px;
+  padding: 11px 12px;
+}
+.status p {
+  color: #25352b;
+  overflow-wrap: anywhere;
+}
+#quota {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+#quota span {
+  margin: 0;
+}
+.telemetry {
+  align-items: flex-start;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  margin: 14px 0;
+}
+.telemetry input {
+  margin-top: 2px;
+  width: auto;
+}
+.message {
+  color: #99462b;
+  font-size: 12px;
+}
+footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+a {
+  color: #23543a;
+}
+dialog {
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 16px 50px #17211b33;
+  max-width: 330px;
+  padding: 20px;
+}
+dialog::backdrop {
+  background: #17211b66;
+}
+dialog h2 {
+  margin-top: 0;
+}
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+.dialog-actions button {
+  width: auto;
+}

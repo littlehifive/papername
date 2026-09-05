@@ -1,0 +1,20 @@
+{
+  "name": "@papername/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wxt build",
+    "dev": "wxt",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "zip": "wxt zip"
+  },
+  "dependencies": {
+    "@papername/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.8",
+    "typescript": "^7.0.2",
+    "wxt": "^0.21.4"
+  }
+}

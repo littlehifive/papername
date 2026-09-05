@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Papername</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Papername</h1>
+          <p>Useful names for research PDFs.</p>
+        </div>
+        <label class="switch"
+          ><input id="enabled" type="checkbox" /><span>On</span></label
+        >
+      </header>
+
+      <section>
+        <label for="preset">Filename preset</label>
+        <select id="preset">
+          <option value="citation">Wu et al. (2026)</option>
+          <option value="citation_title">Wu et al. (2026) — Full title</option>
+          <option value="title">Full title</option>
+          <option value="citation_gist">
+            Wu et al. (2026) — Faithful gist
+          </option>
+        </select>
+      </section>
+
+      <section id="activation" hidden>
+        <label for="invite">Beta invite code</label>
+        <div class="row">
+          <input id="invite" autocomplete="off" placeholder="BETA-XXXX" />
+          <button id="activate" type="button">Activate</button>
+        </div>
+        <p id="activation-message" class="message"></p>
+      </section>
+
+      <section id="quota" hidden>
+        <span>Hosted gists remaining this month</span>
+        <strong id="remaining">—</strong>
+      </section>
+
+      <section class="status">
+        <span>Latest result</span>
+        <p id="last-outcome">No eligible PDF handled yet.</p>
+      </section>
+
+      <label class="telemetry">
+        <input id="telemetry" type="checkbox" />
+        <span>Share anonymous success, fallback, and latency counts</span>
+      </label>
+
+      <button id="pro-interest" class="secondary" type="button">
+        Custom naming — planned at $9 once, 300 gists/month
+      </button>
+
+      <footer>
+        <a id="privacy" href="#">Privacy</a>
+        <a
+          href="https://github.com/littlehifive/papername/issues/new"
+          target="_blank"
+          >Send feedback</a
+        >
+      </footer>
+    </main>
+
+    <dialog id="consent">
+      <form method="dialog">
+        <h2>Enable hosted gists?</h2>
+        <p>
+          Papername will send only the paper title and abstract to its AI
+          provider. If those fields are missing, it may send the DOI to Crossref
+          first. Papername stores none of this content. The provider does not
+          train on API data by default, but may retain abuse-monitoring logs for
+          up to 30 days.
+        </p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary">Cancel</button>
+          <button value="accept">I understand</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

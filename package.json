@@ -1,0 +1,28 @@
+{
+  "name": "papername",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "build": "pnpm -r build",
+    "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e",
+    "dev:extension": "pnpm --filter @papername/extension dev",
+    "dev:worker": "pnpm --filter @papername/worker dev",
+    "eval:gists": "node evals/run.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run && pnpm --filter @papername/worker test:d1",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
+    "happy-dom": "^20.14.0",
+    "prettier": "^3.6.2",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
