@@ -94,6 +94,36 @@ describe("article-page metadata", () => {
     });
   });
 
+  it("extracts an EPrints repository record with repeated Dublin Core identifiers", () => {
+    const document = page(
+      `<meta name="DC.title" content="A meta-analysis of the effect of values affirmation on academic achievement">
+       <meta name="DC.creator" content="Wu, Zezhen">
+       <meta name="DC.creator" content="Spreckelsen, Thees F.">
+       <meta name="DC.creator" content="Cohen, Geoffrey L.">
+       <meta name="DC.description" content="Values affirmation improved achievement for identity-threatened students.">
+       <meta name="DC.date" content="2021-09">
+       <meta name="DC.identifier" content="https://eprints.gla.ac.uk/243676/1/243676.pdf">
+       <meta name="DC.identifier" content="10.1111/josi.12415">`,
+      "https://eprints.gla.ac.uk/243676/",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).toEqual({
+      title:
+        "A meta-analysis of the effect of values affirmation on academic achievement",
+      authors: [
+        { name: "Wu, Zezhen", familyName: "Wu" },
+        { name: "Spreckelsen, Thees F.", familyName: "Spreckelsen" },
+        { name: "Cohen, Geoffrey L.", familyName: "Cohen" },
+      ],
+      year: "2021",
+      abstract:
+        "Values affirmation improved achievement for identity-threatened students.",
+      identifiers: { doi: "10.1111/josi.12415" },
+      pdfUrls: ["https://eprints.gla.ac.uk/243676/1/243676.pdf"],
+      sourceAdapter: "eprints",
+    });
+  });
+
   it("does not mistake supplementary links for the main PDF", () => {
     const document = page(`
       <meta name="citation_title" content="A paper">
@@ -106,9 +136,140 @@ describe("article-page metadata", () => {
     ]);
   });
 
+  it("does not promote supplementary or ambiguous Dublin Core files to the main PDF", () => {
+    const withSupplement = page(`
+      <meta name="dc.title" content="Repository paper">
+      <meta name="dc.identifier" content="/record/main.pdf">
+      <meta name="dc.identifier" content="/record/supporting-information.pdf">
+    `);
+    expect(
+      extractPaperMetadata(withSupplement, withSupplement.URL)?.pdfUrls,
+    ).toEqual(["https://www.jstor.org/record/main.pdf"]);
+
+    const ambiguous = page(`
+      <meta name="dc.title" content="Repository paper">
+      <meta name="dc.identifier" content="/record/version-one.pdf">
+      <meta name="dc.identifier" content="/record/version-two.pdf">
+    `);
+    expect(extractPaperMetadata(ambiguous, ambiguous.URL)?.pdfUrls).toEqual([]);
+  });
+
   it("does not claim unsupported sites", () => {
     expect(sourceAdapterForUrl("https://example.com/paper")).toBeUndefined();
   });
+
+  it.each([
+    ["https://www.nature.com/articles/example", "nature"],
+    ["https://osf.io/preprints/example", "osf"],
+    ["https://papers.ssrn.com/sol3/papers.cfm?id=1", "ssrn"],
+    ["https://eprints.gla.ac.uk/243676/", "eprints"],
+    ["https://law.bepress.com/article/1", "digital-commons"],
+    ["https://www.biorxiv.org/content/1", "biorxiv"],
+    ["https://www.medrxiv.org/content/1", "medrxiv"],
+    ["https://chemrxiv.org/engage/chemrxiv/article-details/1", "chemrxiv"],
+    ["https://zenodo.org/records/1", "zenodo"],
+    ["https://figshare.com/articles/journal_contribution/1", "figshare"],
+    ["https://hal.science/hal-1", "hal"],
+    ["https://www.researchsquare.com/article/rs-1", "research-square"],
+  ])("recognizes first-class source %s", (url, sourceAdapter) => {
+    expect(sourceAdapterForUrl(url)).toBe(sourceAdapter);
+  });
+
+  it.each([
+    {
+      name: "Nature Highwire metadata",
+      url: "https://www.nature.com/articles/s41586-example",
+      sourceAdapter: "nature",
+      title: "Nature paper",
+      pdfPath: "/articles/s41586-example.pdf",
+      html: '<meta name="citation_title" content="Nature paper"><meta name="citation_author" content="Jane Wu"><meta name="citation_publication_date" content="2026"><meta name="citation_doi" content="10.1000/nature"><meta name="citation_pdf_url" content="/articles/s41586-example.pdf">',
+    },
+    {
+      name: "OSF ScholarlyArticle metadata",
+      url: "https://osf.io/preprints/osf/abcde",
+      sourceAdapter: "osf",
+      title: "OSF preprint",
+      pdfPath: "/download/abcde/",
+      html: '<script type="application/ld+json">{"@type":"ScholarlyArticle","headline":"OSF preprint","author":{"name":"Jane Wu","familyName":"Wu"},"datePublished":"2026","identifier":"10.1000/osf","encoding":{"contentUrl":"/download/abcde/","encodingFormat":"application/pdf"}}</script>',
+    },
+    {
+      name: "SSRN in-tab citation metadata",
+      url: "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1",
+      sourceAdapter: "ssrn",
+      title: "SSRN preprint",
+      pdfPath: "/sol3/Delivery.cfm?abstractid=1",
+      html: '<meta name="citation_title" content="SSRN preprint"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/ssrn"><meta name="citation_pdf_url" content="/sol3/Delivery.cfm?abstractid=1">',
+    },
+    {
+      name: "bioRxiv metadata",
+      url: "https://www.biorxiv.org/content/10.1101/example",
+      sourceAdapter: "biorxiv",
+      title: "bioRxiv preprint",
+      pdfPath: "/content/10.1101/example.full.pdf",
+      html: '<meta name="citation_title" content="bioRxiv preprint"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/biorxiv"><meta name="citation_pdf_url" content="/content/10.1101/example.full.pdf">',
+    },
+    {
+      name: "medRxiv metadata",
+      url: "https://www.medrxiv.org/content/10.1101/example",
+      sourceAdapter: "medrxiv",
+      title: "medRxiv preprint",
+      pdfPath: "/content/10.1101/example.full.pdf",
+      html: '<meta name="citation_title" content="medRxiv preprint"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/medrxiv"><meta name="citation_pdf_url" content="/content/10.1101/example.full.pdf">',
+    },
+    {
+      name: "ChemRxiv metadata",
+      url: "https://chemrxiv.org/engage/chemrxiv/article-details/1",
+      sourceAdapter: "chemrxiv",
+      title: "ChemRxiv preprint",
+      pdfPath: "/article/1.pdf",
+      html: '<meta name="citation_title" content="ChemRxiv preprint"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/chemrxiv"><meta name="citation_pdf_url" content="/article/1.pdf">',
+    },
+    {
+      name: "Zenodo Dublin Core metadata",
+      url: "https://zenodo.org/records/1",
+      sourceAdapter: "zenodo",
+      title: "Zenodo paper",
+      pdfPath: "/records/1/files/paper.pdf",
+      html: '<meta name="dc.title" content="Zenodo paper"><meta name="dc.creator" content="Jane Wu"><meta name="dc.date" content="2026"><meta name="dc.identifier" content="10.1000/zenodo"><link type="application/pdf" href="/records/1/files/paper.pdf">',
+    },
+    {
+      name: "Figshare metadata",
+      url: "https://figshare.com/articles/journal_contribution/1",
+      sourceAdapter: "figshare",
+      title: "Figshare paper",
+      pdfPath: "/ndownloader/files/1.pdf",
+      html: '<meta name="citation_title" content="Figshare paper"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/figshare"><meta name="citation_pdf_url" content="/ndownloader/files/1.pdf">',
+    },
+    {
+      name: "HAL metadata",
+      url: "https://hal.science/hal-1",
+      sourceAdapter: "hal",
+      title: "HAL paper",
+      pdfPath: "/hal-1/document.pdf",
+      html: '<meta name="citation_title" content="HAL paper"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/hal"><meta name="citation_pdf_url" content="/hal-1/document.pdf">',
+    },
+    {
+      name: "Research Square metadata",
+      url: "https://www.researchsquare.com/article/rs-1",
+      sourceAdapter: "research-square",
+      title: "Research Square preprint",
+      pdfPath: "/article/rs-1.pdf",
+      html: '<meta name="citation_title" content="Research Square preprint"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_doi" content="10.1000/research-square"><meta name="citation_pdf_url" content="/article/rs-1.pdf">',
+    },
+  ])(
+    "extracts representative $name",
+    ({ url, sourceAdapter, title, pdfPath, html }) => {
+      const document = page(html, url);
+      expect(extractPaperMetadata(document, document.URL)).toMatchObject({
+        title,
+        authors: [{ familyName: "Wu" }],
+        year: "2026",
+        identifiers: { doi: expect.stringMatching(/^10\.1000\//) },
+        pdfUrls: [new URL(pdfPath, url).href],
+        sourceAdapter,
+      });
+    },
+  );
 
   it.each([
     {
@@ -184,5 +345,76 @@ describe("article-page metadata", () => {
       year: "2026",
       sourceAdapter,
     });
+  });
+
+  it("extracts EPrints platform aliases on a user-enabled repository", () => {
+    const document = page(
+      `<meta name="eprints.title" content="Repository paper">
+       <meta name="eprints.creators_name" content="Wu, Jane">
+       <meta name="eprints.creators_name" content="Smith, Alex">
+       <meta name="eprints.date" content="2026-09-05">
+       <meta name="eprints.abstract" content="A repository abstract.">
+       <meta name="eprints.document_url" content="/123/1/paper.pdf">`,
+      "https://research.example.edu/123/",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).toMatchObject({
+      title: "Repository paper",
+      authors: [{ familyName: "Wu" }, { familyName: "Smith" }],
+      year: "2026",
+      abstract: "A repository abstract.",
+      pdfUrls: ["https://research.example.edu/123/1/paper.pdf"],
+      sourceAdapter: "eprints",
+    });
+  });
+
+  it("extracts Digital Commons aliases on a user-enabled repository", () => {
+    const document = page(
+      `<meta name="bepress_citation_title" content="Digital Commons paper">
+       <meta name="bepress_citation_author" content="Jane Wu">
+       <meta name="bepress_citation_date" content="2026">
+       <meta name="bepress_citation_abstract" content="A deposited abstract.">
+       <meta name="bepress_citation_pdf_url" content="/cgi/viewcontent.cgi?article=12&amp;context=series">`,
+      "https://repository.example.edu/series/12/",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).toMatchObject({
+      title: "Digital Commons paper",
+      authors: [{ familyName: "Wu" }],
+      year: "2026",
+      abstract: "A deposited abstract.",
+      pdfUrls: [
+        "https://repository.example.edu/cgi/viewcontent.cgi?article=12&context=series",
+      ],
+      sourceAdapter: "digital-commons",
+    });
+  });
+
+  it("recognizes DSpace from its platform marker on a user-enabled origin", () => {
+    const document = page(
+      `<meta name="generator" content="DSpace 7">
+       <meta name="dc.title" content="DSpace paper">
+       <meta name="dc.creator" content="Wu, Jane">
+       <meta name="dc.date" content="2026">
+       <meta name="dc.identifier" content="https://repository.example.edu/bitstreams/123/content">`,
+      "https://repository.example.edu/items/123",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).toMatchObject({
+      title: "DSpace paper",
+      sourceAdapter: "dspace",
+    });
+  });
+
+  it("does not mistake a Digital Commons abstract-page URL for abstract prose", () => {
+    const document = page(
+      `<meta name="bepress_citation_title" content="Digital Commons paper">
+       <meta name="bepress_citation_abstract_html_url" content="https://repository.example.edu/series/12/">`,
+      "https://repository.example.edu/series/12/",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).not.toHaveProperty(
+      "abstract",
+    );
   });
 });

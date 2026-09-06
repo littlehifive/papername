@@ -8,7 +8,8 @@ export default defineConfig({
     description:
       "THIS EXTENSION IS FOR BETA TESTING. Give academic PDF downloads useful names.",
     minimum_chrome_version: "121",
-    permissions: ["downloads", "storage"],
+    permissions: ["activeTab", "downloads", "scripting", "storage"],
+    optional_host_permissions: ["http://*/*", "https://*/*"],
     host_permissions: [
       ...ARTICLE_MATCHES,
       "https://api.crossref.org/*",

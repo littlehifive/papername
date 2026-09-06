@@ -1,6 +1,6 @@
 # Papername MVP Product Requirements
 
-Status: `implemented-local-mvp`; production beta gates remain in Further Notes
+Status: `implemented-comprehensive-local-mvp`; production beta gates remain in Further Notes
 
 ## Problem Statement
 
@@ -10,7 +10,7 @@ Papername must rename an academic PDF as it is downloaded from a supported artic
 
 ## Solution
 
-Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic metadata from supported article pages, associates that metadata with the corresponding PDF download, and uses Chrome's download filename suggestion interface to apply one of four built-in presets automatically.
+Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic metadata from article pages, associates that metadata with the corresponding PDF download, and uses Chrome's download filename suggestion interface to apply one of four built-in presets automatically. A curated source catalog works without setup. On other HTTP(S) sites, the user can grant temporary access for the current page or remember only the current origin; the extension never requires access to every website at installation.
 
 The default is an APA-like citation label such as `Wu et al. (2026).pdf`. Alternatives add the full title, use the title alone, or combine the citation label with a short English gist. Citation and title naming run locally. Gist mode sends only the title and abstract to a rate-limited Cloudflare Worker, which calls a fast hosted language model and returns a strictly validated short phrase. The backend stores no paper content.
 
@@ -58,6 +58,12 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 38. As the product owner, I want an offline fixture suite, so that tests are deterministic and do not scrape live publisher sites during every run.
 39. As the product owner, I want a manual live smoke matrix before distribution, so that fixture behavior corresponds to current websites.
 40. As the product owner, I want the beta to have explicit continuation criteria, so that paid customization is built only after evidence of reliability and gist demand.
+41. As a researcher, I want Papername to work once on an unfamiliar journal or repository after I explicitly invoke it, so that a static publisher list is not the product ceiling.
+42. As a researcher, I want to remember one exact site, so that institutional repositories can work automatically without granting access to every website.
+43. As a researcher, I want to revoke a remembered site from the popup, so that optional access remains understandable and reversible.
+44. As a researcher opening a recognizable arXiv, EPrints, or DSpace PDF route directly, I want Papername to recover its public record metadata without reading the PDF.
+45. As a privacy-conscious researcher, I want arbitrary-site extraction to stay in my browser and retain only a short-lived paper context.
+46. As the product owner, I want sites whose terms prohibit browser-add-on extraction explicitly blocked, so that broad coverage does not create avoidable policy or account risk.
 
 ## Implementation Decisions
 
@@ -66,8 +72,11 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Define four presets: `citation`, `citation_title`, `title`, and `citation_gist`. Store the active preset and consent/telemetry choices in local Chrome storage.
 - Build citation labels as follows: one author `Wu (2026)`, two authors `Wu & Smith (2026)`, and three or more `Wu et al. (2026)`. Use a corporate author verbatim. Use `n.d.` when a year is unavailable and fall back to title when no author is usable.
 - Normalize filenames by preserving Unicode, converting reserved separators and control characters to readable hyphens, collapsing whitespace, trimming trailing dots/spaces, protecting reserved Windows basenames, and limiting the complete basename to 180 characters at a word boundary.
-- Extract paper metadata from citation/Dublin Core meta elements, `ScholarlyArticle` JSON-LD, and narrowly scoped site adapters. Use DOI, arXiv, or PubMed metadata lookup only when page metadata is insufficient.
-- Request content access only for JSTOR, ScienceDirect/Elsevier, SpringerLink, Wiley, SAGE, Taylor & Francis, APA PsycNet, PubMed/PMC, arXiv, ACM Digital Library, and IEEE Xplore.
+- Extract paper metadata from citation/Dublin Core meta elements, `ScholarlyArticle` JSON-LD, EPrints fields, Digital Commons/bepress fields, and narrowly scoped site adapters. Use DOI, arXiv, or PubMed metadata lookup only when page metadata is insufficient.
+- Scan a curated catalog automatically: JSTOR, ScienceDirect/Elsevier, SpringerLink, Nature, Wiley, SAGE, Taylor & Francis, APA PsycNet, PubMed/PMC, arXiv, ACM, IEEE, OSF, SSRN, Glasgow Enlighten, Digital Commons on `bepress.com`, bioRxiv, medRxiv, ChemRxiv, Zenodo, Figshare, HAL, and Research Square.
+- For other HTTP(S) origins, use Chrome `activeTab` plus `scripting` for an explicit one-page scan. Offer an optional exact-origin grant and persistent registered content script for sites the user chooses to remember. Never request broad required host access.
+- Block ResearchGate page extraction unless ResearchGate grants written permission; its current terms expressly prohibit browser plugins/add-ons used to access or copy service data. Continue to handle a file reached through an independently supported publisher or repository.
+- Recover public article metadata for narrowly recognizable arXiv, EPrints, and DSpace bitstream direct-PDF routes by fetching only a same-origin record page after an explicit popup action. Do not parse or upload the PDF. Digital Commons and SSRN support is limited to metadata already present in the user's article tab; do not guess record routes or crawl them from the Worker.
 - Associate downloads through known PDF URLs, identifiers, referrer/source relationships, and a short-lived per-tab article context. Never use a stale article context solely because it was the most recently visited page.
 - When Adobe Acrobat rewrites a PDF save to its extension origin and a UUID filename, recover identity from the active supported HTTP(S) PDF tab and then apply the same known-URL or identifier checks. Do not use the active tab as evidence for ordinary downloads.
 - Act only on PDFs confidently associated with a paper. Keep supplementary or ambiguous downloads unchanged.
@@ -87,6 +96,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Test only externally observable behavior at the agreed seams. Helper functions may be exercised through the shared package's exported filename and metadata contracts, not by mocking their internals.
 - Shared-domain tests cover literal filename examples, author-count rules, incomplete metadata, Unicode, unsafe characters, reserved basenames, length bounds, every preset, and every fallback.
 - Metadata tests use minimal offline HTML fixtures representing generic citation tags, Dublin Core, JSON-LD, and each supported source family. Expected metadata is authored independently from extraction logic.
+- Site-access tests cover curated, temporary, remembered, blocked, and direct-PDF states. Route-recovery tests require a narrow deterministic record URL and reject unknown routes.
 - Extension integration tests run Chromium with the built extension, visit an intercepted publisher-page fixture, assert metadata arrival and filename-hook registration, and exercise invite/consent state through the real popup. Exported decision tests assert filenames and fallbacks. Ordinary Chrome verifies final on-disk basenames in the live smoke matrix because Playwright's download sandbox replaces filenames and does not reproduce the normal `onDeterminingFilename` event.
 - Matching tests cover multiple tabs, stale contexts, signed PDF URLs, internal PDF viewers, MIME detection, non-PDFs, supplements, unsupported sites, and ambiguous candidates.
 - Worker API-contract tests call the complete fetch handler and cover invite activation/replay, bearer authentication, input bounds, provider timeout/error/schema violations, content-free telemetry, CORS, and remaining-count responses. A Miniflare runtime suite calls the exported Worker endpoint against migrated D1 storage and verifies activation plus atomic monthly quotas.
@@ -101,7 +111,8 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Reading the first pages or full text of a PDF, OCR, and whole-paper summarization.
 - Zotero, Mendeley, Paperpile, citation-manager, folder, and cloud-drive integrations.
 - A searchable library, download history, duplicate detection, or folder organization.
-- Arbitrary website access, user-added domains, and site-specific custom rules.
+- Automatic guessing from arbitrary direct PDF URLs, first-page PDF parsing, OCR, and server-side publisher/repository crawling.
+- ResearchGate extraction or automation without written permission from ResearchGate.
 - Accounts, payments, subscriptions, licenses, custom templates, custom prompts, and paid quotas.
 - Public Chrome Web Store launch, trademark registration, and production marketing assets beyond beta requirements.
 
@@ -110,5 +121,6 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - The MVP is deliberately a two-week, non-revenue beta. The planned-Pro action tests the $9 hypothesis before billing work begins.
 - The model provider does not use API inputs for training by default, but standard abuse-monitoring logs may retain customer content for up to 30 days. Consent and privacy copy must state that accurately.
 - Chrome controls filename conflict behavior. Papername must not request filesystem access merely to customize collisions.
+- Local generic metadata extraction, remembered-origin scripts, and narrow route recovery add no per-request API or LLM cost. Institutional customizations, paywalls, anti-bot systems, session-bound files, scanned PDFs, and missing metadata prevent literal universality; those cases must remain unchanged with an actionable explanation.
 - `Papername` had no obvious conflicting academic-PDF product in the initial market search; formal trademark clearance remains necessary before a paid public launch.
 - Local implementation and automated verification are complete. Production deployment, model evaluation, live publisher smoke checks, private-store review, and the two-week tester measurement require external accounts, credentials, access, or human judgment and remain release gates rather than code tasks.

@@ -54,6 +54,28 @@ export async function removeContext(tabId: number): Promise<void> {
   await browser.storage.session.remove(`${CONTEXT_KEY_PREFIX}${tabId}`);
 }
 
+export async function removeContextsForOrigin(
+  originPattern: string,
+): Promise<void> {
+  let origin: string;
+  try {
+    origin = new URL(originPattern.replace(/\*$/, "")).origin;
+  } catch {
+    return;
+  }
+  const tabIds = (await getContexts()).flatMap((context) => {
+    try {
+      return new URL(context.pageUrl).origin === origin ? [context.tabId] : [];
+    } catch {
+      return [];
+    }
+  });
+  if (!tabIds.length) return;
+  await browser.storage.session.remove(
+    tabIds.map((tabId) => `${CONTEXT_KEY_PREFIX}${tabId}`),
+  );
+}
+
 export async function saveLastOutcome(outcome: LastOutcome): Promise<void> {
   await browser.storage.local.set({ [LAST_OUTCOME_KEY]: outcome });
 }

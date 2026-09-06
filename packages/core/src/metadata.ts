@@ -1,18 +1,5 @@
 import type { PaperAuthor, PaperMetadata } from "./types";
-
-const SOURCE_HOSTS: Array<[RegExp, string]> = [
-  [/(^|\.)jstor\.org$/i, "jstor"],
-  [/(^|\.)sciencedirect\.com$/i, "elsevier"],
-  [/(^|\.)springer\.com$/i, "springer"],
-  [/(^|\.)wiley\.com$/i, "wiley"],
-  [/(^|\.)sagepub\.com$/i, "sage"],
-  [/(^|\.)tandfonline\.com$/i, "taylor-francis"],
-  [/^psycnet\.apa\.org$/i, "apa-psycnet"],
-  [/(^|\.)ncbi\.nlm\.nih\.gov$/i, "pubmed-pmc"],
-  [/(^|\.)arxiv\.org$/i, "arxiv"],
-  [/^dl\.acm\.org$/i, "acm"],
-  [/^ieeexplore\.ieee\.org$/i, "ieee"],
-];
+import { firstClassSourceForUrl } from "./sources";
 
 const CORPORATE_AUTHOR =
   /(consortium|collaboration|group|team|committee|university|institute|association|society)$/i;
@@ -155,12 +142,20 @@ function pdfUrlsFromJson(value: unknown, pageUrl: string): string[] {
 }
 
 export function sourceAdapterForUrl(pageUrl: string): string | undefined {
-  try {
-    const hostname = new URL(pageUrl).hostname;
-    return SOURCE_HOSTS.find(([pattern]) => pattern.test(hostname))?.[1];
-  } catch {
-    return undefined;
-  }
+  return firstClassSourceForUrl(pageUrl)?.id;
+}
+
+function platformAdapterForDocument(document: Document): string | undefined {
+  const names = [...document.querySelectorAll("meta")].map((element) =>
+    (element.getAttribute("name") ?? "").toLocaleLowerCase(),
+  );
+  if (names.some((name) => name.startsWith("eprints."))) return "eprints";
+  if (names.some((name) => name.startsWith("bepress_citation_")))
+    return "digital-commons";
+  const generator = firstMeta(document, ["generator"]);
+  if (/dspace/i.test(generator ?? "") || names.includes("dspace.entity.type"))
+    return "dspace";
+  return undefined;
 }
 
 function arxivFallback(
@@ -201,10 +196,18 @@ export function extractPaperMetadata(
   pageUrl: string,
 ): PaperMetadata | undefined {
   const article = jsonLdNodes(document).find(isScholarlyArticle);
+  const sourceAdapter =
+    sourceAdapterForUrl(pageUrl) ?? platformAdapterForDocument(document);
   const arxiv = arxivFallback(document, pageUrl);
 
   const title =
-    firstMeta(document, ["citation_title", "dc.title", "dcterms.title"]) ??
+    firstMeta(document, [
+      "citation_title",
+      "dc.title",
+      "dcterms.title",
+      "eprints.title",
+      "bepress_citation_title",
+    ]) ??
     clean(
       typeof article?.headline === "string"
         ? article.headline
@@ -219,6 +222,8 @@ export function extractPaperMetadata(
     "citation_author",
     "dc.creator",
     "dcterms.creator",
+    "eprints.creators_name",
+    "bepress_citation_author",
   ]).map(authorFromName);
   const authors = metaAuthors.length
     ? metaAuthors
@@ -230,6 +235,8 @@ export function extractPaperMetadata(
       "citation_abstract",
       "dc.description",
       "dcterms.abstract",
+      "eprints.abstract",
+      "bepress_citation_abstract",
     ]) ??
     clean(
       typeof article?.abstract === "string"
@@ -246,23 +253,51 @@ export function extractPaperMetadata(
       "dc.date",
       "dcterms.issued",
       "article:published_time",
+      "eprints.date",
+      "bepress_citation_date",
     ]) ??
     clean(
       typeof article?.datePublished === "string"
         ? article.datePublished
         : undefined,
     );
-  const rawIdentifier =
-    firstMeta(document, [
+  const rawIdentifiers: unknown[] = [
+    ...metaValues(document, [
       "citation_doi",
       "dc.identifier",
       "dcterms.identifier",
-    ]) ?? article?.identifier;
-  const doi = normalizeDoi(rawIdentifier);
+    ]),
+    ...(Array.isArray(article?.identifier)
+      ? article.identifier
+      : [article?.identifier]),
+  ];
+  const doi = rawIdentifiers
+    .map((identifier) => normalizeDoi(identifier))
+    .find(Boolean);
   const citationPdf = absoluteUrl(
-    firstMeta(document, ["citation_pdf_url"]),
+    firstMeta(document, ["citation_pdf_url", "bepress_citation_pdf_url"]),
     pageUrl,
   );
+  const repositoryFileIdentifiers = metaValues(document, [
+    "eprints.document_url",
+  ]);
+  const identifierPdfCandidates = [
+    ...new Set(
+      [...rawIdentifiers, ...repositoryFileIdentifiers].flatMap(
+        (identifier): string[] => {
+          if (typeof identifier !== "string") return [];
+          const url = absoluteUrl(identifier, pageUrl);
+          return url &&
+            /\.pdf(?:$|[?#])/i.test(url) &&
+            !SUPPLEMENT_PATTERN.test(url)
+            ? [url]
+            : [];
+        },
+      ),
+    ),
+  ];
+  const identifierPdfUrls =
+    identifierPdfCandidates.length === 1 ? identifierPdfCandidates : [];
   const jsonPdfUrls = pdfUrlsFromJson(article?.encoding, pageUrl);
   const linkedPdfUrls = [
     ...document.querySelectorAll('link[type="application/pdf"], a[href]'),
@@ -284,6 +319,7 @@ export function extractPaperMetadata(
     ...new Set(
       [
         citationPdf,
+        ...identifierPdfUrls,
         ...jsonPdfUrls,
         ...(arxiv.pdfUrls ?? []),
         ...linkedPdfUrls,
@@ -309,6 +345,6 @@ export function extractPaperMetadata(
       ...(pmid ? { pmid } : {}),
     },
     pdfUrls,
-    sourceAdapter: sourceAdapterForUrl(pageUrl),
+    ...(sourceAdapter ? { sourceAdapter } : {}),
   };
 }

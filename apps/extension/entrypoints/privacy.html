@@ -23,14 +23,29 @@
   <body>
     <h1>Papername beta privacy</h1>
     <p>
-      Papername reads bibliographic metadata on supported academic article pages
-      solely to name the PDF you download.
+      Papername reads bibliographic metadata on academic article pages solely to
+      name the PDF you download. Curated sources work automatically. Elsewhere,
+      it reads a page only after you choose one-time access or grant access to
+      that exact site.
     </p>
     <h2>Local presets</h2>
     <p>
       Citation and title filenames are generated entirely in your browser.
       Papername does not inspect your Downloads folder or retain a download
       library.
+    </p>
+    <h2>Optional site access</h2>
+    <p>
+      “Use once” relies on Chrome's temporary active-tab access. “Always use”
+      stores Chrome's permission for the current origin and runs the same local
+      metadata extractor on later visits. You can revoke that origin in the
+      popup. Papername does not request permanent access to every website.
+    </p>
+    <p>
+      For a few recognizable repository PDF routes, an explicit action may
+      retrieve the public article-record page from the same site. Papername does
+      not read or upload the PDF itself. ResearchGate is excluded because its
+      current terms prohibit this kind of browser-add-on access.
     </p>
     <h2>Hosted gist preset</h2>
     <p>

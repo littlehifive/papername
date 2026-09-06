@@ -12,7 +12,7 @@ pnpm exec playwright install chromium
 pnpm check
 ```
 
-The Playwright suite verifies that publisher-page metadata reaches the service worker, the Chrome filename hook is registered, and invite/consent settings are visible and persisted through the real popup. Chromium automation does not deliver `onDeterminingFilename` in the same way as an ordinary Chrome profile and replaces physical download names with artifact GUIDs, so filename decisions are covered at the exported decision seam and the final on-disk basename is confirmed in the live smoke test below.
+The Playwright suite verifies that publisher-page metadata reaches the service worker, the Chrome filename hook is registered, the generic-access permissions are packaged, and invite/consent settings are visible and persisted through the real popup. Chromium automation does not deliver `onDeterminingFilename` in the same way as an ordinary Chrome profile and replaces physical download names with artifact GUIDs, so filename decisions are covered at the exported decision seam and the final on-disk basename is confirmed in the live smoke test below.
 
 ## 2. Configure the Worker
 
@@ -58,19 +58,32 @@ Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. 
 
 Use an ordinary Chrome profile with no other download-renaming extension. For each row, open an article page, download its main PDF, verify the on-disk name for every deterministic preset, and ensure a supplement remains unchanged. Record paywall or institutional-access blockers rather than bypassing them.
 
-| Source               | Article page checked | Main PDF renamed | Supplement unchanged | Notes/date |
-| -------------------- | -------------------- | ---------------- | -------------------- | ---------- |
-| JSTOR                | ☐                    | ☐                | ☐                    |            |
-| ScienceDirect        | ☐                    | ☐                | ☐                    |            |
-| SpringerLink         | ☐                    | ☐                | ☐                    |            |
-| Wiley Online Library | ☐                    | ☐                | ☐                    |            |
-| SAGE Journals        | ☐                    | ☐                | ☐                    |            |
-| Taylor & Francis     | ☐                    | ☐                | ☐                    |            |
-| APA PsycNet          | ☐                    | ☐                | ☐                    |            |
-| PubMed / PMC         | ☐                    | ☐                | ☐                    |            |
-| arXiv                | ☐                    | ☐                | ☐                    |            |
-| ACM Digital Library  | ☐                    | ☐                | ☐                    |            |
-| IEEE Xplore          | ☐                    | ☐                | ☐                    |            |
+| Source               | Article page checked | Main PDF renamed | Supplement unchanged | Notes/date  |
+| -------------------- | -------------------- | ---------------- | -------------------- | ----------- |
+| JSTOR                | ☐                    | ☐                | ☐                    |             |
+| ScienceDirect        | ☐                    | ☐                | ☐                    |             |
+| SpringerLink         | ☐                    | ☐                | ☐                    |             |
+| Nature               | ☐                    | ☐                | ☐                    |             |
+| Wiley Online Library | ☐                    | ☐                | ☐                    |             |
+| SAGE Journals        | ☐                    | ☐                | ☐                    |             |
+| Taylor & Francis     | ☐                    | ☐                | ☐                    |             |
+| APA PsycNet          | ☐                    | ☐                | ☐                    |             |
+| PubMed / PMC         | ☐                    | ☐                | ☐                    |             |
+| arXiv                | ☐                    | ☐                | ☐                    |             |
+| ACM Digital Library  | ☐                    | ☐                | ☐                    |             |
+| IEEE Xplore          | ☐                    | ☐                | ☐                    |             |
+| OSF / OSF Preprints  | ☐                    | ☐                | ☐                    |             |
+| SSRN article page    | ☐                    | ☐                | ☐                    | In-tab only |
+| Glasgow Enlighten    | ☐                    | ☐                | ☐                    |             |
+| Digital Commons      | ☐                    | ☐                | ☐                    |             |
+| DSpace (remembered)  | ☐                    | ☐                | ☐                    |             |
+| bioRxiv / medRxiv    | ☐                    | ☐                | ☐                    |             |
+| ChemRxiv             | ☐                    | ☐                | ☐                    |             |
+| Zenodo / Figshare    | ☐                    | ☐                | ☐                    |             |
+| HAL                  | ☐                    | ☐                | ☐                    |             |
+| Research Square      | ☐                    | ☐                | ☐                    |             |
+
+For an unlisted repository origin, verify **Use once on this page**, then reload and confirm it requires another invocation. Verify **Always use on this site**, reload, download successfully without reopening the popup, then use **Stop automatic access** and confirm the permission is removed. On both `https://arxiv.org/pdf/2609.03012` and `https://eprints.gla.ac.uk/243676/1/243676.pdf`, invoke **Find article metadata**, then save the PDF and confirm the citation filename. Confirm an unknown direct-PDF route explains that the article page is required. Confirm ResearchGate shows the policy exclusion and offers no access action.
 
 Also verify disabled mode, duplicate-name uniquifying, Save As behavior (including Adobe Acrobat's Chrome PDF viewer when installed), missing abstract fallback, invalid invite, exhausted quota, provider outage, explicit gist consent, and telemetry opt-out.
 

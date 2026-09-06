@@ -4,7 +4,7 @@ Useful names for research PDFs.
 
 Papername is a Chrome/Chromium extension that automatically renames academic PDF downloads using citation metadata, paper titles, or a concise AI-generated gist. The MVP consists of a Manifest V3 extension and a rate-limited Cloudflare Worker.
 
-See [the product requirements](docs/PRD.md) for the complete behavior and beta acceptance criteria, and [the beta runbook](docs/BETA_RUNBOOK.md) for deployment and live verification.
+See [the product requirements](docs/PRD.md) for the complete behavior and beta acceptance criteria, [supported sites](docs/SUPPORTED_SITES.md) for the current coverage model, and [the beta runbook](docs/BETA_RUNBOOK.md) for deployment and live verification.
 
 ## Development
 
@@ -20,3 +20,5 @@ pnpm dev:extension
 Load `apps/extension/.output/chrome-mv3` from `chrome://extensions` after running the extension dev server or build.
 
 Citation and title naming works without a backend. Copy the provided `.dev.vars.example` and extension `.env.production.example` files only when configuring hosted gist generation.
+
+Curated academic sources work automatically. On another article page, open the Papername popup and choose **Use once on this page** or **Always use on this site**. Remembered access is limited to that exact origin and can be revoked from the popup.

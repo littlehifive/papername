@@ -1,6 +1,5 @@
-import { extractPaperMetadata } from "@papername/core";
-
 import { ARTICLE_MATCHES } from "../src/hosts";
+import { publishPageContext } from "../src/page-capture";
 
 export default defineContentScript({
   matches: [...ARTICLE_MATCHES],
@@ -8,16 +7,10 @@ export default defineContentScript({
   main(context) {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const currentMetadata = () => extractPaperMetadata(document, location.href);
-
     const publish = () => {
-      const metadata = currentMetadata();
-      if (!metadata) return;
-      void chrome.runtime.sendMessage({
-        type: "papername:context",
-        metadata,
-        pageUrl: location.href,
-      });
+      void publishPageContext(document, location.href, (message) =>
+        chrome.runtime.sendMessage(message),
+      );
     };
 
     const schedule = () => {

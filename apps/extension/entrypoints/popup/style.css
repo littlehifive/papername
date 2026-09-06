@@ -13,6 +13,9 @@
 * {
   box-sizing: border-box;
 }
+[hidden] {
+  display: none !important;
+}
 body {
   margin: 0;
   min-width: 360px;
@@ -104,6 +107,19 @@ button:disabled {
 .status p {
   color: #25352b;
   overflow-wrap: anywhere;
+}
+.site-actions {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 10px;
+}
+.site-actions button {
+  font-size: 12px;
+  padding: 8px 9px;
+}
+.site-actions #forget-site {
+  grid-column: 1 / -1;
 }
 #quota {
   align-items: center;
