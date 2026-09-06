@@ -46,4 +46,22 @@ describe("page context publishing", () => {
     ).resolves.toBe(false);
     expect(sendMessage).not.toHaveBeenCalled();
   });
+
+  it("does not treat a generic Dublin Core resources page as a paper", async () => {
+    const window = new Window({ url: "https://example.edu/resources" });
+    window.document.write(`
+      <meta name="dc.title" content="Research resources">
+      <a href="/forms/application.pdf">Download PDF</a>
+    `);
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      publishPageContext(
+        window.document as unknown as Document,
+        window.location.href,
+        sendMessage,
+      ),
+    ).resolves.toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
 });

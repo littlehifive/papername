@@ -21,4 +21,4 @@ Load `apps/extension/.output/chrome-mv3` from `chrome://extensions` after runnin
 
 Citation and title naming works without a backend. Copy the provided `.dev.vars.example` and extension `.env.production.example` files only when configuring hosted gist generation.
 
-Curated academic sources work automatically. On another article page, open the Papername popup and choose **Use once on this page** or **Always use on this site**. Remembered access is limited to that exact origin and can be revoked from the popup.
+Papername works automatically on HTTP(S) article pages after Chrome's install-time site-access prompt is accepted. It reads academic citation metadata locally; deterministic citation/title naming uses no backend. Google Scholar side-PDF clicks can provide the visible result title, author, year, and selected target URL, including many university proxy links. ResearchGate is deliberately excluded. Users can restrict or disable page access at any time through Chrome's extension **Site access** controls, with the tradeoff that automatic naming will then work only on allowed sites.

@@ -5,39 +5,31 @@ import { siteAccessForUrl } from "../src/site-access";
 describe("site access", () => {
   it("reports built-in sources as automatic", () => {
     expect(
-      siteAccessForUrl("https://www.nature.com/articles/example", []),
+      siteAccessForUrl("https://www.nature.com/articles/example"),
     ).toMatchObject({
       mode: "automatic",
       sourceName: "Nature",
-      originPattern: "https://www.nature.com/*",
       directPdf: false,
     });
   });
 
-  it("offers one-time or remembered access for an arbitrary article site", () => {
+  it("reports arbitrary web article sites as automatic", () => {
     expect(
-      siteAccessForUrl("https://repository.example.edu/items/123", []),
+      siteAccessForUrl("https://repository.example.edu/items/123"),
     ).toEqual({
-      mode: "available",
+      mode: "automatic",
       hostname: "repository.example.edu",
-      originPattern: "https://repository.example.edu/*",
       directPdf: false,
     });
-    expect(
-      siteAccessForUrl("https://repository.example.edu/items/123", [
-        "https://repository.example.edu/*",
-      ]),
-    ).toMatchObject({ mode: "remembered" });
   });
 
   it("flags direct PDFs and rejects browser-internal pages", () => {
     expect(
       siteAccessForUrl(
         "https://eprints.example.edu/123/1/paper.pdf?download=1",
-        [],
       ),
-    ).toMatchObject({ mode: "available", directPdf: true });
-    expect(siteAccessForUrl("chrome://extensions", [])).toEqual({
+    ).toMatchObject({ mode: "automatic", directPdf: true });
+    expect(siteAccessForUrl("chrome://extensions")).toEqual({
       mode: "unavailable",
       directPdf: false,
     });
@@ -47,14 +39,13 @@ describe("site access", () => {
     expect(
       siteAccessForUrl(
         "https://repository.example.edu/cgi/viewcontent.cgi?article=12&context=psych",
-        [],
       ),
-    ).toMatchObject({ mode: "available", directPdf: false });
+    ).toMatchObject({ mode: "automatic", directPdf: false });
   });
 
   it("blocks ResearchGate access because its terms prohibit browser add-ons", () => {
     expect(
-      siteAccessForUrl("https://www.researchgate.net/publication/1", []),
+      siteAccessForUrl("https://www.researchgate.net/publication/1"),
     ).toEqual({
       mode: "blocked",
       hostname: "www.researchgate.net",

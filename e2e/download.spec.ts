@@ -85,55 +85,23 @@ test("publishes article metadata and registers the browser filename hook", async
     ).toBe(true);
     const manifest = await worker.evaluate(() => chrome.runtime.getManifest());
     expect(manifest.permissions).toEqual(
-      expect.arrayContaining([
-        "activeTab",
-        "downloads",
-        "scripting",
-        "storage",
-      ]),
+      expect.arrayContaining(["downloads", "storage"]),
     );
-    expect(manifest.optional_host_permissions).toEqual([
-      "http://*/*",
-      "https://*/*",
-    ]);
+    expect(manifest.permissions).not.toEqual(
+      expect.arrayContaining(["activeTab", "scripting"]),
+    );
+    expect(manifest.optional_host_permissions).toBeUndefined();
     expect(manifest.host_permissions).toEqual(
-      expect.arrayContaining([
-        "*://*.nature.com/*",
-        "*://*.osf.io/*",
-        "*://*.ssrn.com/*",
-        "*://*.eprints.gla.ac.uk/*",
-      ]),
+      expect.arrayContaining(["http://*/*", "https://*/*"]),
     );
-    expect(manifest.host_permissions).not.toContain("*://*.researchgate.net/*");
+    expect(manifest.content_scripts?.[0]).toMatchObject({
+      matches: ["http://*/*", "https://*/*"],
+      exclude_matches: ["*://*.researchgate.net/*"],
+    });
     await routePaper(context);
     const page = await context.newPage();
     await page.goto(articleUrl);
     await waitForArticleContext(worker);
-    const probeVerified = await worker.evaluate(async (url) => {
-      const tab = (await chrome.tabs.query({ url }))[0];
-      if (tab?.id === undefined) return false;
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["/probe.js"],
-      });
-      const id = "papername-e2e-registration";
-      await chrome.scripting.registerContentScripts([
-        {
-          id,
-          matches: ["https://www.jstor.org/*"],
-          js: ["/probe.js"],
-          persistAcrossSessions: false,
-        },
-      ]);
-      const registered = await chrome.scripting.getRegisteredContentScripts({
-        ids: [id],
-      });
-      await chrome.scripting.unregisterContentScripts({ ids: [id] });
-      return (
-        registered[0]?.js?.some((path) => path.endsWith("probe.js")) ?? false
-      );
-    }, articleUrl);
-    expect(probeVerified).toBe(true);
     const contexts = await worker.evaluate(async () =>
       Object.values(await chrome.storage.session.get(null)),
     );
@@ -295,49 +263,79 @@ test("the built extension injects on every major publisher family", async () => 
   }
 });
 
-test("a running generic probe can be stopped when site access is revoked", async () => {
+test("an unfamiliar metadata-rich repository works without opening the popup", async () => {
   const { context, worker } = await launchExtension();
-  const pageUrl = "https://api.crossref.org/papername-probe-test";
+  const repositoryUrl = "https://repository.example.edu/items/agency-paper";
+  const repositoryPdf =
+    "https://repository.example.edu/bitstreams/agency-paper/content.pdf";
   try {
-    await context.route(pageUrl, (route) =>
+    await context.route("https://repository.example.edu/**", (route) =>
       route.fulfill({
         status: 200,
         contentType: "text/html",
-        body: '<meta name="citation_title" content="Initial paper"><meta name="citation_author" content="Jane Wu">',
+        body: `<meta name="citation_title" content="A paper from an unfamiliar repository">
+          <meta name="citation_author" content="Jane Wu">
+          <meta name="citation_date" content="2026">
+          <meta name="citation_pdf_url" content="${repositoryPdf}">`,
       }),
     );
     const page = await context.newPage();
-    await page.goto(pageUrl);
-    const tabId = await worker.evaluate(async (url) => {
-      const tab = (await chrome.tabs.query({ url }))[0];
-      if (tab?.id === undefined) throw new Error("Test tab was not found");
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["/probe.js"],
-      });
-      return tab.id;
-    }, pageUrl);
+    await page.goto(repositoryUrl);
     await waitForArticleContext(worker);
 
-    await worker.evaluate(async (id) => {
-      await chrome.tabs.sendMessage(id, { type: "papername:stop-probe" });
-      await chrome.storage.session.clear();
-    }, tabId);
-    await page.evaluate(() => {
-      document
-        .querySelector('meta[name="citation_title"]')
-        ?.setAttribute("content", "Changed paper");
-      document.body.append(document.createElement("div"));
+    const contexts = await worker.evaluate(async () =>
+      Object.values(await chrome.storage.session.get(null)),
+    );
+    expect(contexts[0]).toMatchObject({
+      pageUrl: repositoryUrl,
+      metadata: {
+        title: "A paper from an unfamiliar repository",
+        authors: [{ familyName: "Wu" }],
+        year: "2026",
+        pdfUrls: [repositoryPdf],
+      },
     });
-    await page.waitForTimeout(500);
+  } finally {
+    await context.close();
+  }
+});
 
-    expect(
-      await worker.evaluate(async () =>
-        Object.keys(await chrome.storage.session.get(null)).filter((key) =>
-          key.startsWith("articleContext:"),
-        ),
-      ),
-    ).toEqual([]);
+test("captures a proxied PDF from the selected Google Scholar result", async () => {
+  const { context, worker } = await launchExtension();
+  const scholarUrl = "https://scholar.google.com/scholar?q=human+agency";
+  const proxyPdf =
+    "https://link-springer-com.proxy.library.edu/content/pdf/10.1007/example.pdf";
+  try {
+    await context.route("https://scholar.google.com/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: `<div class="gs_r gs_or gs_scl">
+          <div class="gs_or_ggsm"><a id="pdf" href="${proxyPdf}">[PDF] springer.com</a></div>
+          <h3 class="gs_rt"><a>Subjective quantitative studies of human agency</a></h3>
+          <div class="gs_a">S Alkire - Social indicators research, 2005 - Springer</div>
+          <div class="gs_rs">Can we measure expansions in agency?</div>
+        </div>`,
+      }),
+    );
+    const page = await context.newPage();
+    await page.goto(scholarUrl);
+    await page.locator("#pdf").dispatchEvent("pointerdown");
+    await waitForArticleContext(worker);
+
+    const contexts = await worker.evaluate(async () =>
+      Object.values(await chrome.storage.session.get(null)),
+    );
+    expect(contexts[0]).toMatchObject({
+      pageUrl: scholarUrl,
+      metadata: {
+        title: "Subjective quantitative studies of human agency",
+        authors: [{ familyName: "Alkire" }],
+        year: "2005",
+        pdfUrls: [proxyPdf],
+        sourceAdapter: "google-scholar",
+      },
+    });
   } finally {
     await context.close();
   }

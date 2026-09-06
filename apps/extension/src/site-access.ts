@@ -1,12 +1,12 @@
 import { firstClassSourceForUrl } from "@papername/core";
 
+import { isExcludedArticleHostname } from "./hosts";
 import { landingPageCandidates } from "./repository-routes";
 
 export type SiteAccess =
   | {
-      mode: "automatic" | "remembered" | "available";
+      mode: "automatic";
       hostname: string;
-      originPattern: string;
       directPdf: boolean;
       sourceName?: string;
     }
@@ -18,22 +18,13 @@ export type SiteAccess =
       reason: "site_terms";
     };
 
-function isResearchGate(hostname: string): boolean {
-  return (
-    hostname === "researchgate.net" || hostname.endsWith(".researchgate.net")
-  );
-}
-
-export function siteAccessForUrl(
-  pageUrl: string | undefined,
-  grantedOrigins: readonly string[],
-): SiteAccess {
+export function siteAccessForUrl(pageUrl: string | undefined): SiteAccess {
   if (!pageUrl) return { mode: "unavailable", directPdf: false };
   try {
     const url = new URL(pageUrl);
     if (url.protocol !== "https:" && url.protocol !== "http:")
       return { mode: "unavailable", directPdf: false };
-    if (isResearchGate(url.hostname)) {
+    if (isExcludedArticleHostname(url.hostname)) {
       return {
         mode: "blocked",
         hostname: url.hostname,
@@ -43,16 +34,10 @@ export function siteAccessForUrl(
         reason: "site_terms",
       };
     }
-    const originPattern = `${url.origin}/*`;
     const source = firstClassSourceForUrl(pageUrl);
     return {
-      mode: source
-        ? "automatic"
-        : grantedOrigins.includes(originPattern)
-          ? "remembered"
-          : "available",
+      mode: "automatic",
       hostname: url.hostname,
-      originPattern,
       directPdf:
         /\.pdf(?:$|[?#])/i.test(pageUrl) ||
         landingPageCandidates(pageUrl).length > 0,

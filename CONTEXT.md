@@ -5,9 +5,9 @@ Papername is a Chrome extension that gives downloaded academic PDFs useful filen
 ## Glossary
 
 - **Article page**: A journal, repository, or preprint landing page that describes one paper and exposes scholarly metadata.
-- **Curated source**: A tested origin where Papername reads article metadata automatically.
-- **One-page scan**: Temporary access to the active HTTP(S) page after the user invokes Papername.
-- **Remembered site**: An exact origin the user has optionally authorized for automatic metadata extraction.
+- **Curated source**: A tested academic origin with source-specific metadata handling and full-page observation.
+- **Automatic web coverage**: Required HTTP(S) page access accepted at install/update, used locally to detect academic citation metadata without a per-site popup workflow.
+- **Scholar result context**: Title, author, year, and selected side-PDF URL read from the visible Google Scholar result the user activates; snippets are not treated as abstracts.
 - **Recoverable PDF route**: A recognized arXiv, EPrints, or DSpace PDF URL that deterministically maps to a same-origin article record without reading the PDF.
 - **Paper metadata**: The title, author list, publication year, abstract, identifiers, and known PDF URLs extracted from an article page.
 - **Preset**: One of the four built-in filename formats: citation, citation plus title, title, or citation plus gist.
@@ -28,6 +28,7 @@ Papername is a Chrome extension that gives downloaded academic PDFs useful filen
 - A recognized Adobe Acrobat handoff may use the active supported PDF tab URL
   locally to restore source identity; this URL is never persisted as an outcome
   or sent in telemetry.
-- Unknown sites are read only after an explicit one-page scan or exact-origin grant.
+- HTTP(S) pages are eligible for automatic local metadata detection after the user accepts Chrome's site-access warning; on non-curated pages observation is limited to metadata in the document head.
+- Users may restrict Papername to selected sites using Chrome's extension Site access controls, which correspondingly reduces automatic coverage.
 - ResearchGate is not read or automated while its terms prohibit browser add-ons used for that purpose.
 - Direct-PDF recovery never guesses beyond recognized same-origin repository routes and never reads or uploads PDF content.

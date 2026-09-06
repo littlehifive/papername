@@ -109,17 +109,11 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 .site-actions {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: 1fr 1fr;
   margin-top: 10px;
 }
 .site-actions button {
   font-size: 12px;
   padding: 8px 9px;
-}
-.site-actions #forget-site {
-  grid-column: 1 / -1;
 }
 #quota {
   align-items: center;

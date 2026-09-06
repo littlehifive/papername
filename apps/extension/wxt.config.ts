@@ -6,16 +6,10 @@ export default defineConfig({
   manifest: {
     name: "Papername BETA",
     description:
-      "THIS EXTENSION IS FOR BETA TESTING. Give academic PDF downloads useful names.",
+      "THIS EXTENSION IS FOR BETA TESTING. Automatically name academic PDF downloads across the web.",
     minimum_chrome_version: "121",
-    permissions: ["activeTab", "downloads", "scripting", "storage"],
-    optional_host_permissions: ["http://*/*", "https://*/*"],
-    host_permissions: [
-      ...ARTICLE_MATCHES,
-      "https://api.crossref.org/*",
-      "http://127.0.0.1:8787/*",
-      "https://api.papername.app/*",
-    ],
+    permissions: ["downloads", "storage"],
+    host_permissions: [...ARTICLE_MATCHES],
     icons: {
       16: "icon-16.png",
       32: "icon-32.png",

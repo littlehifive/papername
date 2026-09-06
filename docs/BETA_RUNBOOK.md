@@ -52,7 +52,7 @@ Copy `apps/extension/.env.production.example` to `apps/extension/.env.production
 pnpm --filter @papername/extension zip
 ```
 
-Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. Use a private distribution restricted to the 25 tester accounts, the name **Papername BETA**, and the disclosure **THIS EXTENSION IS FOR BETA TESTING**. Link the packaged privacy page or publish equivalent privacy text at a stable URL. Do not claim that Pro is available; the popup says it is a planned $9 one-time upgrade.
+Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. Use a private distribution restricted to the 25 tester accounts, the name **Papername BETA**, and the disclosure **THIS EXTENSION IS FOR BETA TESTING**. The listing and pre-install tester instructions must explain that automatic cross-publisher naming requires Chrome's broad HTTP(S) site-access warning, that bibliographic metadata is processed locally, and that users can narrow access through Chrome's Site access controls. Link the packaged privacy page or publish equivalent privacy text at a stable URL. Do not claim that Pro is available; the popup says it is a planned $9 one-time upgrade.
 
 ## 5. Live smoke matrix
 
@@ -76,14 +76,16 @@ Use an ordinary Chrome profile with no other download-renaming extension. For ea
 | SSRN article page    | ☐                    | ☐                | ☐                    | In-tab only |
 | Glasgow Enlighten    | ☐                    | ☐                | ☐                    |             |
 | Digital Commons      | ☐                    | ☐                | ☐                    |             |
-| DSpace (remembered)  | ☐                    | ☐                | ☐                    |             |
+| DSpace               | ☐                    | ☐                | ☐                    |             |
 | bioRxiv / medRxiv    | ☐                    | ☐                | ☐                    |             |
 | ChemRxiv             | ☐                    | ☐                | ☐                    |             |
 | Zenodo / Figshare    | ☐                    | ☐                | ☐                    |             |
 | HAL                  | ☐                    | ☐                | ☐                    |             |
 | Research Square      | ☐                    | ☐                | ☐                    |             |
 
-For an unlisted repository origin, verify **Use once on this page**, then reload and confirm it requires another invocation. Verify **Always use on this site**, reload, download successfully without reopening the popup, then use **Stop automatic access** and confirm the permission is removed. On both `https://arxiv.org/pdf/2609.03012` and `https://eprints.gla.ac.uk/243676/1/243676.pdf`, invoke **Find article metadata**, then save the PDF and confirm the citation filename. Confirm an unknown direct-PDF route explains that the article page is required. Confirm ResearchGate shows the policy exclusion and offers no access action.
+On first install or this permission-changing update, confirm Chrome displays the broad website-access warning and that the tester has explicitly accepted it. For an unlisted metadata-rich repository origin, load the article page, reload it, and confirm automatic naming works both times without opening Papername. Then set Papername's Chrome Site access to **On click** or a restricted site and verify automatic naming is correspondingly limited; restore **On all sites** for the remaining matrix.
+
+On Google Scholar, activate a side `[PDF]` link routed through a university proxy and confirm the filename uses the visible result's author and year. Record whether the proxy preserves the selected URL; session-bound or opaque redirects are an expected limit. On both `https://arxiv.org/pdf/2609.03012` and `https://eprints.gla.ac.uk/243676/1/243676.pdf`, invoke **Find article metadata**, then save the PDF and confirm the citation filename. Confirm an unknown direct-PDF route explains that the article page is required. Confirm ResearchGate shows the policy exclusion and offers no access action.
 
 Also verify disabled mode, duplicate-name uniquifying, Save As behavior (including Adobe Acrobat's Chrome PDF viewer when installed), missing abstract fallback, invalid invite, exhausted quota, provider outage, explicit gist consent, and telemetry opt-out.
 

@@ -6,10 +6,14 @@ const CORPORATE_AUTHOR =
 const SUPPLEMENT_PATTERN =
   /(?:supp(?:l|lement|lementary)?(?:[-_ ]?(?:file|info(?:rmation)?|material))?|supporting[-_ ]?(?:information|material)|appendix|additional[-_ ]?file|table[-_ ]?s?\d+|fig(?:ure)?[-_ ]?s?\d+|data[-_ ]?s?\d+|mmc\d*|esm)(?:[./?&=_ -]|$)/i;
 
-function clean(value: string | null | undefined): string | undefined {
+export function cleanMetadataText(
+  value: string | null | undefined,
+): string | undefined {
   const result = value?.replace(/\s+/g, " ").trim();
   return result || undefined;
 }
+
+const clean = cleanMetadataText;
 
 function stripLabel(
   value: string | undefined,
@@ -38,7 +42,7 @@ function yearFrom(value: string | undefined): string | undefined {
   return value?.match(/(?:18|19|20|21)\d{2}/)?.[0];
 }
 
-function normalizeDoi(value: unknown): string | undefined {
+export function normalizeDoi(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const match = value.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+/i);
   return match?.[0]?.replace(/[.,;)]+$/g, "").toLowerCase();

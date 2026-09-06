@@ -23,10 +23,10 @@
   <body>
     <h1>Papername beta privacy</h1>
     <p>
-      Papername reads bibliographic metadata on academic article pages solely to
-      name the PDF you download. Curated sources work automatically. Elsewhere,
-      it reads a page only after you choose one-time access or grant access to
-      that exact site.
+      Papername reads bibliographic metadata on HTTP(S) pages solely to name the
+      academic PDF you download. Automatic coverage across publishers,
+      university proxies, and institution-specific repositories requires broad
+      Chrome site access, which Chrome discloses at install or update.
     </p>
     <h2>Local presets</h2>
     <p>
@@ -34,18 +34,28 @@
       Papername does not inspect your Downloads folder or retain a download
       library.
     </p>
-    <h2>Optional site access</h2>
+    <h2>Site access</h2>
     <p>
-      “Use once” relies on Chrome's temporary active-tab access. “Always use”
-      stores Chrome's permission for the current origin and runs the same local
-      metadata extractor on later visits. You can revoke that origin in the
-      popup. Papername does not request permanent access to every website.
+      Page metadata is processed locally and retained only as a short-lived
+      article context. Papername does not modify pages. On unrecognized sites,
+      it watches only citation metadata in the document head; tested academic
+      sources may also expose metadata elsewhere in the page. You can change
+      Papername to “On click” or selected sites, or disable its access, through
+      Chrome's extension Site access controls. Doing so reduces automatic
+      coverage.
     </p>
     <p>
       For a few recognizable repository PDF routes, an explicit action may
       retrieve the public article-record page from the same site. Papername does
       not read or upload the PDF itself. ResearchGate is excluded because its
       current terms prohibit this kind of browser-add-on access.
+    </p>
+    <p>
+      When you activate a Google Scholar side link marked “[PDF],” Papername
+      reads the visible result title, author line, year, and selected link
+      locally so that many library-proxy downloads can be matched. It does not
+      automate searches, retain a search history, treat snippets as abstracts,
+      or send Scholar result data to Papername's server.
     </p>
     <h2>Hosted gist preset</h2>
     <p>

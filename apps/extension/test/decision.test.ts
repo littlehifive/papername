@@ -144,6 +144,40 @@ describe("download decision", () => {
     });
   });
 
+  it("renames a proxied PDF using its selected Google Scholar result", async () => {
+    const proxyPdf =
+      "https://link-springer-com.proxy.library.edu/content/pdf/10.1007/example.pdf";
+    await expect(
+      decideDownload({
+        contexts: [
+          {
+            tabId: 8,
+            pageUrl: "https://scholar.google.com/scholar?q=human+agency",
+            capturedAt: now - 100,
+            metadata: {
+              title: "Subjective quantitative studies of human agency",
+              authors: [{ name: "S Alkire", familyName: "Alkire" }],
+              year: "2005",
+              identifiers: { doi: "10.1007/example" },
+              pdfUrls: [proxyPdf],
+              sourceAdapter: "google-scholar",
+            },
+          },
+        ],
+        download: {
+          url: "https://link.springer.com/content/pdf/10.1007/example.pdf",
+          filename: "10.1007-example.pdf",
+          mime: "application/pdf",
+        },
+        settings,
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({
+      suggestion: "Alkire (2005).pdf",
+      outcome: "renamed",
+    });
+  });
+
   it("does nothing when Papername is disabled or the PDF is unrelated", async () => {
     await expect(
       decideDownload({
