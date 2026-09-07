@@ -146,7 +146,7 @@ test("publishes article metadata and registers the browser filename hook", async
       "Ready to rename",
     );
     await expect(popup.locator("#site-access-message")).toHaveText(
-      "Paper details found on JSTOR. PDFs downloaded from this page will be renamed.",
+      "Paper details found on JSTOR. Papername is ready to name this paper's PDF.",
     );
     await popup.locator("#enabled").uncheck();
     await expect(popup.locator("#site-access-label")).toHaveText(
@@ -205,7 +205,11 @@ test("activates a beta invite and records explicit gist consent", async () => {
 
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await expect(popup.locator("#activation")).toBeHidden();
+    await expect(popup.locator("#activation")).toBeVisible();
+    await expect(popup.locator("#activation summary")).toContainText(
+      "One-time invite, not an API key",
+    );
+    await expect(popup.locator("#activation")).not.toHaveAttribute("open", "");
     await expect(popup.locator(".telemetry strong")).toHaveText(
       "Share anonymous usage data",
     );
@@ -214,6 +218,9 @@ test("activates a beta invite and records explicit gist consent", async () => {
     );
     await expect(popup.locator("#pro-interest")).toHaveText(
       "I'd buy you a coffee ☕",
+    );
+    await expect(popup.locator(".support-card p")).toHaveText(
+      "No payment yet — this simply saves your interest on this device.",
     );
 
     await popup.locator("#preset").selectOption("citation_gist");
@@ -230,6 +237,7 @@ test("activates a beta invite and records explicit gist consent", async () => {
     await popup.locator('#consent button[value="accept"]').click();
     await expect(popup.locator("#preset")).toHaveValue("citation_gist");
     await expect(popup.locator("#activation")).toBeVisible();
+    await expect(popup.locator("#activation")).toHaveAttribute("open", "");
     await expect(popup.locator('#activation label[for="invite"]')).toHaveText(
       "Beta access code",
     );

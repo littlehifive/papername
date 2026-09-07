@@ -35,6 +35,30 @@ function canonicalUrl(value: string | undefined): string | undefined {
   }
 }
 
+function isFreshContext(context: ArticleContext, now: number): boolean {
+  return (
+    now - context.capturedAt <= CONTEXT_TTL_MS &&
+    context.capturedAt <= now + 60_000
+  );
+}
+
+export function contextSupportsCurrentPage(
+  context: ArticleContext,
+  page: { tabId: number; url: string },
+  now = Date.now(),
+): boolean {
+  if (context.tabId !== page.tabId || !isFreshContext(context, now))
+    return false;
+  const currentUrl = canonicalUrl(page.url);
+  return (
+    Boolean(currentUrl) &&
+    (canonicalUrl(context.pageUrl) === currentUrl ||
+      context.metadata.pdfUrls.some(
+        (pdfUrl) => canonicalUrl(pdfUrl) === currentUrl,
+      ))
+  );
+}
+
 function candidateUrls(download: DownloadCandidate): string[] {
   const direct = [download.url, download.finalUrl, download.viewerUrl].filter(
     (value): value is string => Boolean(value),
@@ -113,11 +137,7 @@ function scoreContext(
   download: DownloadCandidate,
   now: number,
 ): number {
-  if (
-    now - context.capturedAt > CONTEXT_TTL_MS ||
-    context.capturedAt > now + 60_000
-  )
-    return 0;
+  if (!isFreshContext(context, now)) return 0;
   if (!isLikelyPdfDownload(download)) return 0;
 
   const exact = exactKnownPdf(context, download);

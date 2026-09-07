@@ -14,7 +14,7 @@ Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic
 
 The default is an APA-like citation label such as `Wu et al. (2026).pdf`. Alternatives add the full title, use the title alone, or combine the citation label with a short English gist. Citation and title naming run locally. Gist mode sends only the title and abstract to a rate-limited Cloudflare Worker, which calls a fast hosted language model and returns a strictly validated short phrase. The backend stores no paper content.
 
-The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; a small “I'd buy you a coffee” action lets testers send encouragement without implying that checkout or a paid tier already exists.
+The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; a small “I'd buy you a coffee” action records interest locally without implying that checkout or a paid tier already exists. Its aggregate count is shared only when the tester has separately opted into anonymous usage data and activated beta access.
 
 ## User Stories
 
@@ -52,7 +52,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 32. As the product owner, I want model credentials kept only in Worker secrets, so that they cannot be extracted from the extension.
 33. As the product owner, I want invite codes stored as hashes and usable once, so that beta access is controlled.
 34. As the product owner, I want unsupported and ambiguous downloads measured as typed fallback outcomes, so that reliability problems are diagnosable without collecting paper content.
-35. As the product owner, I want a truthful coffee-sized encouragement action, so that testers can express support without fake checkout or unavailable pricing promises.
+35. As the product owner, I want a truthful, explicitly non-payment coffee-interest action, so that testers can express support without fake checkout or unavailable pricing promises.
 36. As the product owner, I want the MVP to cover representative journal, repository, preprint, and engineering sources, so that cross-discipline usefulness is tested.
 37. As the product owner, I want automated extension and backend tests, so that publisher-specific fixes do not silently break core naming.
 38. As the product owner, I want an offline fixture suite, so that tests are deterministic and do not scrape live publisher sites during every run.

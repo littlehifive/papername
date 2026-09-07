@@ -52,7 +52,7 @@ Copy `apps/extension/.env.production.example` to `apps/extension/.env.production
 pnpm --filter @papername/extension zip
 ```
 
-Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. Use a private distribution restricted to the 25 tester accounts, the name **Papername BETA**, and the disclosure **THIS EXTENSION IS FOR BETA TESTING**. The listing and pre-install tester instructions must explain that automatic cross-publisher naming requires Chrome's broad HTTP(S) site-access warning, that bibliographic metadata is processed locally, and that users can narrow access through Chrome's Site access controls. Link the packaged privacy page or publish equivalent privacy text at a stable URL. Do not claim that a paid tier, pricing, or checkout is available; the popup only offers an “I'd buy you a coffee” encouragement signal.
+Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. Use a private distribution restricted to the 25 tester accounts, the name **Papername BETA**, and the disclosure **THIS EXTENSION IS FOR BETA TESTING**. The listing and pre-install tester instructions must explain that automatic cross-publisher naming requires Chrome's broad HTTP(S) site-access warning, that bibliographic metadata is processed locally, and that users can narrow access through Chrome's Site access controls. Link the packaged privacy page or publish equivalent privacy text at a stable URL. Do not claim that a paid tier, pricing, checkout, or donation link is available; the popup clearly labels its “I'd buy you a coffee” action as a local interest signal.
 
 ## 5. Live smoke matrix
 

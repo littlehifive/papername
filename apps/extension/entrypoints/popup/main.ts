@@ -1,4 +1,4 @@
-import type { Preset } from "@papername/core";
+import { contextSupportsCurrentPage, type Preset } from "@papername/core";
 import { browser } from "wxt/browser";
 
 import { activateInvite, sendTelemetry } from "../../src/backend";
@@ -18,7 +18,7 @@ import {
 const enabled = document.querySelector<HTMLInputElement>("#enabled")!;
 const preset = document.querySelector<HTMLSelectElement>("#preset")!;
 const telemetry = document.querySelector<HTMLInputElement>("#telemetry")!;
-const activation = document.querySelector<HTMLElement>("#activation")!;
+const activation = document.querySelector<HTMLDetailsElement>("#activation")!;
 const invite = document.querySelector<HTMLInputElement>("#invite")!;
 const activate = document.querySelector<HTMLButtonElement>("#activate")!;
 const activationMessage = document.querySelector<HTMLElement>(
@@ -73,19 +73,26 @@ let currentSiteAccess: SiteAccess = {
 };
 let latestFilename: string | undefined;
 
-type SiteState = "checking" | "ready" | "attention" | "blocked" | "unavailable";
+type SiteState = "checking" | "ready" | "warning" | "blocked" | "unavailable";
 
-function setSiteState(state: SiteState, label: string): void {
+function setSiteStatus(
+  state: SiteState,
+  label: string,
+  message: string,
+  showAction = false,
+): void {
   const icons: Record<SiteState, string> = {
     checking: "…",
     ready: "✓",
-    attention: "!",
+    warning: "!",
     blocked: "×",
     unavailable: "–",
   };
   siteAccess.dataset.state = state;
   siteAccessIcon.textContent = icons[state];
   siteAccessLabel.textContent = label;
+  siteAccessMessage.textContent = message;
+  siteActions.hidden = !showAction;
 }
 
 function renderFormatPreview(nextPreset: Preset): void {
@@ -111,64 +118,79 @@ async function renderSiteAccess(isEnabled = true): Promise<void> {
       ? { id: activeTab.id, url: activeTab.url }
       : undefined;
   currentSiteAccess = siteAccessForUrl(currentTab?.url);
-  siteActions.hidden = true;
 
   if (!isEnabled) {
-    setSiteState("unavailable", "Papername is off");
-    siteAccessMessage.textContent =
-      "Turn Papername on to rename downloads from this page.";
+    setSiteStatus(
+      "unavailable",
+      "Papername is off",
+      "Turn Papername on to rename downloads from this page.",
+    );
     return;
   }
 
   if (currentSiteAccess.mode === "unavailable") {
-    setSiteState("unavailable", "Not an article page");
-    siteAccessMessage.textContent =
-      "Open an academic article page, then download its PDF.";
+    setSiteStatus(
+      "unavailable",
+      "Not an article page",
+      "Open an academic article page, then download its PDF.",
+    );
     return;
   }
   if (currentSiteAccess.mode === "blocked") {
-    setSiteState("blocked", "Unavailable here");
-    siteAccessMessage.textContent =
-      "Papername cannot read ResearchGate pages because that site does not allow this kind of browser extension.";
+    setSiteStatus(
+      "blocked",
+      "Unavailable here",
+      "Papername cannot read ResearchGate pages because that site does not allow this kind of browser extension.",
+    );
     return;
   }
+  const activePage = currentTab
+    ? { tabId: currentTab.id, url: currentTab.url }
+    : undefined;
   const paperDetailsFound = Boolean(
-    currentTab &&
-    contexts.some(
-      (context) =>
-        context.tabId === currentTab?.id &&
-        (context.pageUrl === currentTab.url ||
-          context.metadata.pdfUrls.includes(currentTab.url)),
-    ),
+    activePage &&
+    contexts.some((context) => contextSupportsCurrentPage(context, activePage)),
   );
   if (paperDetailsFound) {
-    setSiteState("ready", "Ready to rename");
-    siteAccessMessage.textContent = currentSiteAccess.sourceName
-      ? `Paper details found on ${currentSiteAccess.sourceName}. PDFs downloaded from this page will be renamed.`
-      : "Paper details found. PDFs downloaded from this page will be renamed.";
+    setSiteStatus(
+      "ready",
+      "Ready to rename",
+      currentSiteAccess.sourceName
+        ? `Paper details found on ${currentSiteAccess.sourceName}. Papername is ready to name this paper's PDF.`
+        : "Paper details found. Papername is ready to name this paper's PDF.",
+    );
     return;
   }
   if (currentSiteAccess.directPdf) {
     if (currentTab && landingPageCandidates(currentTab.url).length) {
-      setSiteState("attention", "Paper details needed");
-      siteAccessMessage.textContent =
-        "Papername may be able to find this PDF's public article page without reading the PDF itself.";
-      siteActions.hidden = false;
+      setSiteStatus(
+        "warning",
+        "Paper details needed",
+        "Papername may be able to find this PDF's public article page without reading the PDF itself.",
+        true,
+      );
     } else {
-      setSiteState("unavailable", "Cannot identify this PDF");
-      siteAccessMessage.textContent =
-        "Open the article or repository page first, then download the PDF there.";
+      setSiteStatus(
+        "unavailable",
+        "Cannot identify this PDF",
+        "Open the article or repository page first, then download the PDF there.",
+      );
     }
     return;
   }
   if (currentSiteAccess.sourceName) {
-    setSiteState("attention", "No paper found yet");
-    siteAccessMessage.textContent = `${currentSiteAccess.sourceName} is supported, but this page does not show enough paper details yet. Open a specific article page.`;
+    setSiteStatus(
+      "warning",
+      "No paper found yet",
+      `${currentSiteAccess.sourceName} is supported, but this page does not show enough paper details yet. Open a specific article page.`,
+    );
     return;
   }
-  setSiteState("attention", "No paper found");
-  siteAccessMessage.textContent =
-    "This page does not show enough academic paper details. Open the paper's article page, then download its PDF.";
+  setSiteStatus(
+    "warning",
+    "No paper found",
+    "This page does not show enough academic paper details. Open the paper's article page, then download its PDF.",
+  );
 }
 
 async function refreshActiveContext(): Promise<void> {
@@ -189,8 +211,8 @@ async function render(): Promise<void> {
   preset.value = settings.preset;
   renderFormatPreview(settings.preset);
   telemetry.checked = settings.telemetryEnabled;
-  activation.hidden =
-    Boolean(settings.betaToken) || settings.preset !== "citation_gist";
+  activation.hidden = Boolean(settings.betaToken);
+  activation.open = !settings.betaToken && settings.preset === "citation_gist";
   quota.hidden = !settings.betaToken;
   remaining.textContent = String(settings.remaining ?? "—");
   if (settings.proInterest) {
@@ -223,19 +245,24 @@ scanSite.addEventListener("click", async () => {
       currentTab.url,
     );
     if (captured) {
-      setSiteState("ready", "Ready to rename");
-      siteAccessMessage.textContent =
-        "Paper details found. Downloads of this PDF will be renamed.";
-      siteActions.hidden = true;
+      setSiteStatus(
+        "ready",
+        "Ready to rename",
+        "Paper details found. Papername is ready to name this PDF.",
+      );
     } else {
-      setSiteState("attention", "No paper found");
-      siteAccessMessage.textContent =
-        "Papername could not find reliable paper details. Open its article or repository page instead.";
+      setSiteStatus(
+        "warning",
+        "No paper found",
+        "Papername could not find reliable paper details. Open its article or repository page instead.",
+      );
     }
   } catch {
-    setSiteState("attention", "Could not check this page");
-    siteAccessMessage.textContent =
-      "Chrome could not read this page. Reload it, then try again.";
+    setSiteStatus(
+      "warning",
+      "Could not check this page",
+      "Chrome could not read this page. Reload it, then try again.",
+    );
   } finally {
     setSiteButtonBusy(false);
   }

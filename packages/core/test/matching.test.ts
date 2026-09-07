@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  contextSupportsCurrentPage,
   findMatchingContext,
   type ArticleContext,
   type DownloadCandidate,
@@ -36,6 +37,53 @@ function download(
 }
 
 describe("eligible download association", () => {
+  it("reports current, fresh article and PDF pages as ready", () => {
+    expect(
+      contextSupportsCurrentPage(
+        context,
+        {
+          tabId: 7,
+          url: `${context.pageUrl}?token=temporary#abstract`,
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      contextSupportsCurrentPage(
+        context,
+        {
+          tabId: 7,
+          url: `${metadata.pdfUrls[0]}?download=1`,
+        },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not report stale, future, or different-tab contexts as ready", () => {
+    expect(
+      contextSupportsCurrentPage(
+        { ...context, capturedAt: now - 31 * 60_000 },
+        { tabId: 7, url: context.pageUrl },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      contextSupportsCurrentPage(
+        { ...context, capturedAt: now + 61_000 },
+        { tabId: 7, url: context.pageUrl },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      contextSupportsCurrentPage(
+        context,
+        { tabId: 8, url: context.pageUrl },
+        now,
+      ),
+    ).toBe(false);
+  });
+
   it("matches a known PDF URL despite a changed query string", () => {
     expect(findMatchingContext([context], download(), now)).toBe(context);
   });

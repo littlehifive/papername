@@ -58,22 +58,30 @@
         </div>
       </section>
 
-      <section id="activation" class="activation-card" hidden>
-        <label for="invite">Beta access code</label>
-        <p id="activation-description" class="field-help">
-          Enter the one-time code from your beta invitation to use AI key
-          takeaways. This is not an API key.
-        </p>
-        <div class="row">
-          <input
-            id="invite"
-            autocomplete="off"
-            placeholder="Enter invite code"
-          />
-          <button id="activate" type="button">Unlock</button>
+      <details id="activation" class="activation-card" hidden>
+        <summary>
+          <span>
+            <strong>Have a beta access code?</strong>
+            <small>One-time invite, not an API key</small>
+          </span>
+        </summary>
+        <div class="activation-content">
+          <label for="invite">Beta access code</label>
+          <p id="activation-description" class="field-help">
+            Enter the one-time code from your beta invitation to use AI key
+            takeaways. This is not an API key.
+          </p>
+          <div class="row">
+            <input
+              id="invite"
+              autocomplete="off"
+              placeholder="Enter invite code"
+            />
+            <button id="activate" type="button">Unlock</button>
+          </div>
+          <p id="activation-message" class="message"></p>
         </div>
-        <p id="activation-message" class="message"></p>
-      </section>
+      </details>
 
       <section id="quota" hidden>
         <span>AI key takeaways left this month</span>
@@ -112,7 +120,9 @@
       <section class="support-card">
         <div>
           <strong>Enjoying Papername?</strong>
-          <p>Send a little encouragement while the beta grows.</p>
+          <p>
+            No payment yet — this simply saves your interest on this device.
+          </p>
         </div>
         <button id="pro-interest" class="secondary" type="button">
           I'd buy you a coffee ☕
