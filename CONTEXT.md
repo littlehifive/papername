@@ -10,9 +10,9 @@ Papername is a Chrome extension that gives downloaded academic PDFs useful filen
 - **Scholar result context**: Title, author, year, and selected side-PDF URL read from the visible Google Scholar result the user activates; snippets are not treated as abstracts.
 - **Recoverable PDF route**: A recognized arXiv, EPrints, or DSpace PDF URL that deterministically maps to a same-origin article record without reading the PDF.
 - **Paper metadata**: The title, author list, publication year, abstract, identifiers, and known PDF URLs extracted from an article page.
-- **Preset**: One of the four built-in filename formats: citation, citation plus title, title, or citation plus gist.
+- **Filename format** (internally `Preset`): One of the four built-in naming styles: authors and year, authors/year/title, title, or authors/year/key takeaway.
 - **Citation label**: An APA-like compact author/year label such as `Wu et al. (2026)`.
-- **Gist**: A short, faithful English statement of the paper's reported main finding or contribution.
+- **Key takeaway** (internally `Gist`): A short, faithful English statement of the paper's reported main finding or contribution.
 - **Eligible download**: A PDF download that can be confidently associated with recently extracted paper metadata.
 - **Fallback**: The deterministic filename used when a selected preset cannot be completed safely.
 - **Beta token**: A bearer credential issued after a one-use invite code is activated.

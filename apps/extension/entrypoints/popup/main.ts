@@ -8,6 +8,7 @@ import {
 } from "../../src/direct-pdf";
 import { siteAccessForUrl, type SiteAccess } from "../../src/site-access";
 import {
+  getContexts,
   getLastOutcome,
   getSettings,
   setPreset,
@@ -32,24 +33,79 @@ const privacy = document.querySelector<HTMLAnchorElement>("#privacy")!;
 const siteAccessMessage = document.querySelector<HTMLElement>(
   "#site-access-message",
 )!;
+const siteAccess = document.querySelector<HTMLElement>("#site-access")!;
+const siteAccessIcon =
+  document.querySelector<HTMLElement>("#site-access-icon")!;
+const siteAccessLabel =
+  document.querySelector<HTMLElement>("#site-access-label")!;
 const siteActions = document.querySelector<HTMLElement>("#site-actions")!;
 const scanSite = document.querySelector<HTMLButtonElement>("#scan-site")!;
+const formatPattern = document.querySelector<HTMLElement>("#format-pattern")!;
+const formatExample = document.querySelector<HTMLElement>("#format-example")!;
+const copyLastOutcome =
+  document.querySelector<HTMLButtonElement>("#copy-last-outcome")!;
+const copyLabel = copyLastOutcome.querySelector<HTMLElement>(".copy-label")!;
+
+const FORMAT_PREVIEWS: Record<Preset, { pattern: string; example: string }> = {
+  citation: {
+    pattern: "[Authors] ([Year])",
+    example: "Cerna-Turoff et al. (2021).pdf",
+  },
+  citation_title: {
+    pattern: "[Authors] ([Year]) — [Title]",
+    example: "Cerna-Turoff et al. (2021) — Violence against children.pdf",
+  },
+  title: {
+    pattern: "[Title]",
+    example: "Violence against children.pdf",
+  },
+  citation_gist: {
+    pattern: "[Authors] ([Year]) — [Key takeaway]",
+    example:
+      "Cerna-Turoff et al. (2021) — Childhood violence shapes later health.pdf",
+  },
+};
 
 let currentTab: { id: number; url: string } | undefined;
 let currentSiteAccess: SiteAccess = {
   mode: "unavailable",
   directPdf: false,
 };
+let latestFilename: string | undefined;
+
+type SiteState = "checking" | "ready" | "attention" | "blocked" | "unavailable";
+
+function setSiteState(state: SiteState, label: string): void {
+  const icons: Record<SiteState, string> = {
+    checking: "…",
+    ready: "✓",
+    attention: "!",
+    blocked: "×",
+    unavailable: "–",
+  };
+  siteAccess.dataset.state = state;
+  siteAccessIcon.textContent = icons[state];
+  siteAccessLabel.textContent = label;
+}
+
+function renderFormatPreview(nextPreset: Preset): void {
+  const preview = FORMAT_PREVIEWS[nextPreset];
+  formatPattern.textContent = preview.pattern;
+  formatExample.textContent = preview.example;
+}
 
 function setSiteButtonBusy(busy: boolean): void {
   scanSite.disabled = busy;
 }
 
-async function renderSiteAccess(): Promise<void> {
-  const [activeTab] = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
+async function renderSiteAccess(isEnabled = true): Promise<void> {
+  const [[activeTab], contexts] = await Promise.all([
+    browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    }),
+    getContexts(),
+  ]);
   currentTab =
     activeTab?.id !== undefined && activeTab.url
       ? { id: activeTab.id, url: activeTab.url }
@@ -57,33 +113,62 @@ async function renderSiteAccess(): Promise<void> {
   currentSiteAccess = siteAccessForUrl(currentTab?.url);
   siteActions.hidden = true;
 
-  if (currentSiteAccess.mode === "unavailable") {
+  if (!isEnabled) {
+    setSiteState("unavailable", "Papername is off");
     siteAccessMessage.textContent =
-      "Open an academic article page to use Papername.";
+      "Turn Papername on to rename downloads from this page.";
+    return;
+  }
+
+  if (currentSiteAccess.mode === "unavailable") {
+    setSiteState("unavailable", "Not an article page");
+    siteAccessMessage.textContent =
+      "Open an academic article page, then download its PDF.";
     return;
   }
   if (currentSiteAccess.mode === "blocked") {
+    setSiteState("blocked", "Unavailable here");
     siteAccessMessage.textContent =
-      "ResearchGate is excluded because its terms prohibit browser add-ons from accessing site data.";
+      "Papername cannot read ResearchGate pages because that site does not allow this kind of browser extension.";
+    return;
+  }
+  const paperDetailsFound = Boolean(
+    currentTab &&
+    contexts.some(
+      (context) =>
+        context.tabId === currentTab?.id &&
+        (context.pageUrl === currentTab.url ||
+          context.metadata.pdfUrls.includes(currentTab.url)),
+    ),
+  );
+  if (paperDetailsFound) {
+    setSiteState("ready", "Ready to rename");
+    siteAccessMessage.textContent = currentSiteAccess.sourceName
+      ? `Paper details found on ${currentSiteAccess.sourceName}. PDFs downloaded from this page will be renamed.`
+      : "Paper details found. PDFs downloaded from this page will be renamed.";
     return;
   }
   if (currentSiteAccess.directPdf) {
     if (currentTab && landingPageCandidates(currentTab.url).length) {
+      setSiteState("attention", "Paper details needed");
       siteAccessMessage.textContent =
-        "This PDF has a recognizable repository route. Papername can retrieve its article metadata without reading the PDF.";
+        "Papername may be able to find this PDF's public article page without reading the PDF itself.";
       siteActions.hidden = false;
     } else {
+      setSiteState("unavailable", "Cannot identify this PDF");
       siteAccessMessage.textContent =
-        "Open the article or repository record page first; this bare PDF has no safely recoverable metadata route.";
+        "Open the article or repository page first, then download the PDF there.";
     }
     return;
   }
   if (currentSiteAccess.sourceName) {
-    siteAccessMessage.textContent = `Automatic on ${currentSiteAccess.sourceName}. Download the PDF from its article page.`;
+    setSiteState("attention", "No paper found yet");
+    siteAccessMessage.textContent = `${currentSiteAccess.sourceName} is supported, but this page does not show enough paper details yet. Open a specific article page.`;
     return;
   }
+  setSiteState("attention", "No paper found");
   siteAccessMessage.textContent =
-    "Automatic when this page exposes academic citation metadata.";
+    "This page does not show enough academic paper details. Open the paper's article page, then download its PDF.";
 }
 
 async function refreshActiveContext(): Promise<void> {
@@ -102,24 +187,24 @@ async function render(): Promise<void> {
   const settings = await getSettings();
   enabled.checked = settings.enabled;
   preset.value = settings.preset;
+  renderFormatPreview(settings.preset);
   telemetry.checked = settings.telemetryEnabled;
-  activation.hidden = Boolean(settings.betaToken);
+  activation.hidden =
+    Boolean(settings.betaToken) || settings.preset !== "citation_gist";
   quota.hidden = !settings.betaToken;
   remaining.textContent = String(settings.remaining ?? "—");
   if (settings.proInterest) {
-    proInterest.textContent = "Thanks — saved on this device";
+    proInterest.textContent = "Thanks — that means a lot!";
     proInterest.disabled = true;
   }
 
   const last = await getLastOutcome();
-  lastOutcome.textContent = last
-    ? last.suggestion
-      ? last.outcome === "fallback"
-        ? `Fallback (${last.reason.replaceAll("_", " ")}): ${last.suggestion}`
-        : `Renamed: ${last.suggestion}`
-      : `Unchanged: ${last.reason.replaceAll("_", " ")}`
-    : "No eligible PDF handled yet.";
-  await renderSiteAccess();
+  latestFilename = last?.suggestion;
+  lastOutcome.textContent =
+    latestFilename ??
+    (last ? "The latest PDF was left unchanged." : "No PDF renamed yet.");
+  copyLastOutcome.hidden = !latestFilename;
+  await renderSiteAccess(settings.enabled);
 }
 
 scanSite.addEventListener("click", async () => {
@@ -137,10 +222,18 @@ scanSite.addEventListener("click", async () => {
       currentTab.id,
       currentTab.url,
     );
-    siteAccessMessage.textContent = captured
-      ? "Ready. Download the PDF from this page."
-      : "No reliable paper metadata found. Open its article or repository record page instead.";
+    if (captured) {
+      setSiteState("ready", "Ready to rename");
+      siteAccessMessage.textContent =
+        "Paper details found. Downloads of this PDF will be renamed.";
+      siteActions.hidden = true;
+    } else {
+      setSiteState("attention", "No paper found");
+      siteAccessMessage.textContent =
+        "Papername could not find reliable paper details. Open its article or repository page instead.";
+    }
   } catch {
+    setSiteState("attention", "Could not check this page");
     siteAccessMessage.textContent =
       "Chrome could not read this page. Reload it, then try again.";
   } finally {
@@ -148,10 +241,10 @@ scanSite.addEventListener("click", async () => {
   }
 });
 
-enabled.addEventListener(
-  "change",
-  () => void updateSettings({ enabled: enabled.checked }),
-);
+enabled.addEventListener("change", async () => {
+  await updateSettings({ enabled: enabled.checked });
+  await renderSiteAccess(enabled.checked);
+});
 telemetry.addEventListener(
   "change",
   () => void updateSettings({ telemetryEnabled: telemetry.checked }),
@@ -171,6 +264,7 @@ preset.addEventListener("change", async () => {
     });
     if (!accepted) {
       preset.value = settings.preset;
+      renderFormatPreview(settings.preset);
       return;
     }
     await updateSettings({ gistConsent: true });
@@ -190,6 +284,24 @@ preset.addEventListener("change", async () => {
     }).catch(() => undefined);
   }
   await render();
+});
+
+copyLastOutcome.addEventListener("click", async () => {
+  if (!latestFilename) return;
+  try {
+    await navigator.clipboard.writeText(latestFilename);
+    copyLastOutcome.setAttribute("aria-label", "Copied filename");
+    copyLabel.textContent = "Copied";
+    copyLastOutcome.classList.add("is-copied");
+    window.setTimeout(() => {
+      copyLastOutcome.setAttribute("aria-label", "Copy filename");
+      copyLabel.textContent = "Copy";
+      copyLastOutcome.classList.remove("is-copied");
+    }, 1_500);
+  } catch {
+    copyLastOutcome.setAttribute("aria-label", "Could not copy filename");
+    copyLabel.textContent = "Try again";
+  }
 });
 
 activate.addEventListener("click", async () => {
@@ -219,7 +331,7 @@ activate.addEventListener("click", async () => {
 proInterest.addEventListener("click", async () => {
   const settings = await getSettings();
   await updateSettings({ proInterest: true });
-  proInterest.textContent = "Thanks — saved on this device";
+  proInterest.textContent = "Thanks — that means a lot!";
   proInterest.disabled = true;
   if (settings.telemetryEnabled && settings.betaToken) {
     void sendTelemetry(settings.betaToken, {

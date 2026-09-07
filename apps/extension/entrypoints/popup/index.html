@@ -11,60 +11,113 @@
       <header>
         <div>
           <h1>Papername</h1>
-          <p>Useful names for research PDFs.</p>
+          <p>Give every academic PDF a name that makes sense.</p>
         </div>
         <label class="switch"
           ><input id="enabled" type="checkbox" /><span>On</span></label
         >
       </header>
 
-      <section>
-        <label for="preset">Filename preset</label>
-        <select id="preset">
-          <option value="citation">Wu et al. (2026)</option>
-          <option value="citation_title">Wu et al. (2026) — Full title</option>
-          <option value="title">Full title</option>
-          <option value="citation_gist">
-            Wu et al. (2026) — Faithful gist
-          </option>
-        </select>
-      </section>
-
-      <section id="site-access" class="status">
-        <span>Current site</span>
-        <p id="site-access-message">Checking access…</p>
+      <section
+        id="site-access"
+        class="status site-status"
+        data-state="checking"
+      >
+        <div class="status-heading">
+          <span>Current page</span>
+          <div id="site-access-indicator" class="site-indicator" role="status">
+            <span id="site-access-icon" aria-hidden="true">…</span>
+            <strong id="site-access-label">Checking…</strong>
+          </div>
+        </div>
+        <p id="site-access-message">Looking for academic paper details…</p>
         <div id="site-actions" class="site-actions" hidden>
-          <button id="scan-site" type="button">Find article metadata</button>
+          <button id="scan-site" type="button">Find paper details</button>
         </div>
       </section>
 
-      <section id="activation" hidden>
-        <label for="invite">Beta invite code</label>
+      <section id="naming-style">
+        <label for="preset">How should PDFs be named?</label>
+        <select id="preset">
+          <option value="citation">Authors &amp; year</option>
+          <option value="citation_title">Authors, year &amp; title</option>
+          <option value="title">Full title</option>
+          <option value="citation_gist">
+            Authors, year &amp; key takeaway
+          </option>
+        </select>
+        <div class="format-preview" aria-live="polite">
+          <div class="format-preview-row">
+            <span>Format</span>
+            <code id="format-pattern">[Authors] ([Year])</code>
+          </div>
+          <div class="format-preview-row format-example-row">
+            <span>Example</span>
+            <strong id="format-example">Cerna-Turoff et al. (2021).pdf</strong>
+          </div>
+        </div>
+      </section>
+
+      <section id="activation" class="activation-card" hidden>
+        <label for="invite">Beta access code</label>
+        <p id="activation-description" class="field-help">
+          Enter the one-time code from your beta invitation to use AI key
+          takeaways. This is not an API key.
+        </p>
         <div class="row">
-          <input id="invite" autocomplete="off" placeholder="BETA-XXXX" />
-          <button id="activate" type="button">Activate</button>
+          <input
+            id="invite"
+            autocomplete="off"
+            placeholder="Enter invite code"
+          />
+          <button id="activate" type="button">Unlock</button>
         </div>
         <p id="activation-message" class="message"></p>
       </section>
 
       <section id="quota" hidden>
-        <span>Hosted gists remaining this month</span>
+        <span>AI key takeaways left this month</span>
         <strong id="remaining">—</strong>
       </section>
 
-      <section class="status">
-        <span>Latest result</span>
+      <section class="status latest-result">
+        <div class="status-heading">
+          <span>Latest result</span>
+          <button
+            id="copy-last-outcome"
+            class="copy-button"
+            type="button"
+            aria-label="Copy filename"
+            hidden
+          >
+            <span class="copy-icon" aria-hidden="true"></span>
+            <span class="copy-label">Copy</span>
+          </button>
+        </div>
         <p id="last-outcome">No eligible PDF handled yet.</p>
       </section>
 
-      <label class="telemetry">
+      <label class="telemetry" for="telemetry">
         <input id="telemetry" type="checkbox" />
-        <span>Share anonymous success, fallback, and latency counts</span>
+        <span>
+          <strong>Share anonymous usage data</strong>
+          <small>
+            Help improve Papername by sharing whether renaming worked, why it
+            didn't, and how long it took. Paper titles, filenames, and websites
+            are never included.
+          </small>
+        </span>
       </label>
 
-      <button id="pro-interest" class="secondary" type="button">
-        Custom naming — planned at $9 once, 300 gists/month
-      </button>
+      <section class="support-card">
+        <div>
+          <strong>Enjoying Papername?</strong>
+          <p>Send a little encouragement while the beta grows.</p>
+        </div>
+        <button id="pro-interest" class="secondary" type="button">
+          I'd buy you a coffee ☕
+        </button>
+      </section>
 
       <footer>
         <a id="privacy" href="#">Privacy</a>
@@ -78,17 +131,23 @@
 
     <dialog id="consent">
       <form method="dialog">
-        <h2>Enable hosted gists?</h2>
+        <h2>Use AI-generated key takeaways?</h2>
         <p>
-          Papername will send only the paper title and abstract to its AI
-          provider. If those fields are missing, it may send the DOI to Crossref
-          first. Papername stores none of this content. The provider does not
-          train on API data by default, but may retain abuse-monitoring logs for
-          up to 30 days.
+          To create a short takeaway for the filename, Papername sends the
+          paper's title and abstract — not the PDF — to an AI service.
+        </p>
+        <p>
+          Papername does not store this content. The AI provider does not use
+          API data for training by default, but may keep copies in safety logs
+          for up to 30 days.
+        </p>
+        <p>
+          If the title or abstract is missing, Papername may use the paper's DOI
+          to retrieve those details from Crossref.
         </p>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary">Cancel</button>
-          <button value="accept">I understand</button>
+          <button value="cancel" class="secondary">Not now</button>
+          <button value="accept">Enable key takeaways</button>
         </div>
       </form>
     </dialog>

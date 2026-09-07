@@ -126,13 +126,63 @@ test("publishes article metadata and registers the browser filename hook", async
       }),
     );
     const popup = await context.newPage();
+    await popup.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            localStorage.setItem("copied-filename", value),
+        },
+      });
+    });
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.bringToFront();
+    await popup.reload();
+
+    await expect(popup.locator("header p")).toHaveText(
+      "Give every academic PDF a name that makes sense.",
+    );
+    await expect(popup.locator("#site-access-label")).toHaveText(
+      "Ready to rename",
+    );
+    await expect(popup.locator("#site-access-message")).toHaveText(
+      "Paper details found on JSTOR. PDFs downloaded from this page will be renamed.",
+    );
+    await popup.locator("#enabled").uncheck();
+    await expect(popup.locator("#site-access-label")).toHaveText(
+      "Papername is off",
+    );
+    await popup.locator("#enabled").check();
+    await expect(popup.locator("#site-access-label")).toHaveText(
+      "Ready to rename",
+    );
+    const siteStatusBox = await popup.locator("#site-access").boundingBox();
+    const namingStyleBox = await popup.locator("#naming-style").boundingBox();
+    expect(siteStatusBox?.y).toBeLessThan(namingStyleBox?.y ?? 0);
+
     await expect(popup.locator("#preset")).toHaveValue("citation");
+    await expect(popup.locator('option[value="citation"]')).toHaveText(
+      "Authors & year",
+    );
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Authors] ([Year])",
+    );
+    await expect(popup.locator("#format-example")).toHaveText(
+      "Cerna-Turoff et al. (2021).pdf",
+    );
     await expect(popup.locator("#enabled")).toBeChecked();
     await expect(popup.locator("#site-actions")).toBeHidden();
-    await expect(popup.locator("#last-outcome")).toContainText(
-      "Fallback (gist timeout): Williams & Bargh (2008)",
+    await expect(popup.locator("#last-outcome")).toHaveText(
+      "Williams & Bargh (2008) — Warm hands, warm heart.pdf",
     );
+    await popup.locator("#copy-last-outcome").click();
+    await expect(popup.locator("#copy-last-outcome")).toHaveAttribute(
+      "aria-label",
+      "Copied filename",
+    );
+    await expect
+      .poll(() => popup.evaluate(() => localStorage.getItem("copied-filename")))
+      .toBe("Williams & Bargh (2008) — Warm hands, warm heart.pdf");
   } finally {
     await context.close();
   }
@@ -155,13 +205,44 @@ test("activates a beta invite and records explicit gist consent", async () => {
 
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await expect(popup.locator("#activation")).toBeHidden();
+    await expect(popup.locator(".telemetry strong")).toHaveText(
+      "Share anonymous usage data",
+    );
+    await expect(popup.locator(".telemetry small")).toContainText(
+      "Paper titles, filenames, and websites are never included.",
+    );
+    await expect(popup.locator("#pro-interest")).toHaveText(
+      "I'd buy you a coffee ☕",
+    );
+
+    await popup.locator("#preset").selectOption("citation_gist");
+    await expect(popup.locator("#consent")).toBeVisible();
+    await expect(popup.locator("#consent h2")).toHaveText(
+      "Use AI-generated key takeaways?",
+    );
+    await expect(popup.locator("#consent")).toContainText(
+      "Papername sends the paper's title and abstract — not the PDF — to an AI service.",
+    );
+    await expect(popup.locator("#consent")).toContainText(
+      "may keep copies in safety logs for up to 30 days",
+    );
+    await popup.locator('#consent button[value="accept"]').click();
+    await expect(popup.locator("#preset")).toHaveValue("citation_gist");
+    await expect(popup.locator("#activation")).toBeVisible();
+    await expect(popup.locator('#activation label[for="invite"]')).toHaveText(
+      "Beta access code",
+    );
+    await expect(popup.locator("#activation-description")).toHaveText(
+      "Enter the one-time code from your beta invitation to use AI key takeaways. This is not an API key.",
+    );
+
     await popup.locator("#invite").fill("BETA-TEST");
     await popup.locator("#activate").click();
     await expect(popup.locator("#remaining")).toHaveText("30");
-    await popup.locator("#preset").selectOption("citation_gist");
-    await expect(popup.locator("#consent")).toBeVisible();
-    await popup.locator('#consent button[value="accept"]').click();
-    await expect(popup.locator("#preset")).toHaveValue("citation_gist");
+    await expect(popup.locator("#quota")).toContainText(
+      "AI key takeaways left this month",
+    );
 
     await expect
       .poll(() =>

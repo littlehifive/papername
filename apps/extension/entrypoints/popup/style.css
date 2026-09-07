@@ -27,7 +27,7 @@ header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 h1 {
   font-family: Georgia, serif;
@@ -90,6 +90,16 @@ button:disabled {
 .row button {
   width: auto;
 }
+.field-help {
+  font-size: 11px;
+  margin: -1px 0 8px;
+}
+.activation-card {
+  background: #f4edda;
+  border: 1px solid #e6d6a5;
+  border-radius: 10px;
+  padding: 11px 12px;
+}
 .switch {
   align-items: center;
   display: flex;
@@ -104,9 +114,112 @@ button:disabled {
   border-radius: 10px;
   padding: 11px 12px;
 }
+.status-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.status-heading > span {
+  color: #4c5750;
+  font-size: 12px;
+  font-weight: 650;
+}
 .status p {
   color: #25352b;
   overflow-wrap: anywhere;
+}
+.site-status {
+  border: 1px solid transparent;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.site-status[data-state="ready"] {
+  background: #e3efe7;
+  border-color: #b9d7c2;
+}
+.site-status[data-state="attention"] {
+  background: #f4edda;
+  border-color: #e6d6a5;
+}
+.site-status[data-state="blocked"] {
+  background: #f5e5e2;
+  border-color: #e7c3bc;
+}
+.site-indicator {
+  align-items: center;
+  color: #59635c;
+  display: flex;
+  font-size: 11px;
+  gap: 5px;
+}
+.site-indicator > span {
+  align-items: center;
+  background: #707a73;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  height: 17px;
+  justify-content: center;
+  line-height: 1;
+  width: 17px;
+}
+.site-status[data-state="ready"] .site-indicator {
+  color: #23613d;
+}
+.site-status[data-state="ready"] .site-indicator > span {
+  background: #2f7a4e;
+}
+.site-status[data-state="attention"] .site-indicator {
+  color: #7b5b12;
+}
+.site-status[data-state="attention"] .site-indicator > span {
+  background: #ad7c16;
+}
+.site-status[data-state="blocked"] .site-indicator {
+  color: #8a3829;
+}
+.site-status[data-state="blocked"] .site-indicator > span {
+  background: #a74735;
+}
+.format-preview {
+  background: #f9f8f3;
+  border: 1px solid #dfe1da;
+  border-radius: 8px;
+  margin-top: 8px;
+  padding: 9px 10px;
+}
+.format-preview-row {
+  align-items: baseline;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+.format-preview-row + .format-preview-row {
+  margin-top: 5px;
+}
+.format-preview-row > span {
+  color: #727a74;
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+.format-preview code,
+.format-preview strong {
+  color: #26382d;
+  font-size: 11px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.format-preview code {
+  font-family: inherit;
+}
+.format-example-row strong {
+  color: #576159;
+  font-weight: 450;
 }
 .site-actions {
   margin-top: 10px;
@@ -123,6 +236,41 @@ button:disabled {
 #quota span {
   margin: 0;
 }
+.latest-result .status-heading {
+  margin-bottom: 5px;
+}
+.copy-button {
+  align-items: center;
+  background: transparent;
+  color: #23543a;
+  display: inline-flex;
+  font-size: 11px;
+  gap: 6px;
+  padding: 3px 4px;
+}
+.copy-button:hover {
+  background: #dce2da;
+}
+.copy-button.is-copied {
+  color: #2f714a;
+}
+.copy-icon {
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  height: 10px;
+  position: relative;
+  width: 9px;
+}
+.copy-icon::before {
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  content: "";
+  height: 8px;
+  left: -4px;
+  position: absolute;
+  top: -4px;
+  width: 7px;
+}
 .telemetry {
   align-items: flex-start;
   display: flex;
@@ -132,6 +280,44 @@ button:disabled {
 }
 .telemetry input {
   margin-top: 2px;
+  width: auto;
+}
+.telemetry span,
+.telemetry strong,
+.telemetry small {
+  display: block;
+}
+.telemetry strong {
+  color: #344139;
+  font-size: 12px;
+}
+.telemetry small {
+  color: #68716b;
+  font-size: 10.5px;
+  font-weight: 450;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.support-card {
+  align-items: center;
+  background: #ebece5;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 11px 12px;
+}
+.support-card > div > strong {
+  color: #344139;
+  font-size: 12px;
+}
+.support-card p {
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+.support-card .secondary {
+  background: #f8f7f2;
+  padding: 8px 10px;
   width: auto;
 }
 .message {

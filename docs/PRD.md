@@ -14,7 +14,7 @@ Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic
 
 The default is an APA-like citation label such as `Wu et al. (2026).pdf`. Alternatives add the full title, use the title alone, or combine the citation label with a short English gist. Citation and title naming run locally. Gist mode sends only the title and abstract to a rate-limited Cloudflare Worker, which calls a fast hosted language model and returns a strictly validated short phrase. The backend stores no paper content.
 
-The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; an honest coming-soon action tests interest in a planned $9 one-time Pro upgrade.
+The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; a small “I'd buy you a coffee” action lets testers send encouragement without implying that checkout or a paid tier already exists.
 
 ## User Stories
 
@@ -38,11 +38,11 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 18. As a researcher, I want invalid filename characters cleaned safely, so that names work across common operating systems.
 19. As a researcher, I want long names shortened at word boundaries, so that a verbose title does not create an unusable path.
 20. As a researcher, I want to turn Papername off quickly, so that I can download a file unchanged when needed.
-21. As a researcher, I want to change presets from a small toolbar popup, so that configuration is immediate.
-22. As a researcher, I want to see the latest rename or fallback reason, so that silent behavior is understandable.
-23. As a gist user, I want to see my remaining monthly allowance, so that a fallback is not surprising.
+21. As a researcher, I want to change filename formats from a small toolbar popup, so that configuration is immediate.
+22. As a researcher, I want to see and copy the latest generated filename, so that I can reuse it if I miss the download notification.
+23. As a key-takeaway user, I want to see my remaining monthly allowance, so that a fallback is not surprising.
 24. As a privacy-conscious researcher, I want citation and title presets to work without sending paper content to Papername's server.
-25. As a privacy-conscious researcher, I want explicit consent before the first hosted gist request, so that I understand the data boundary.
+25. As a privacy-conscious researcher, I want explicit consent before the first AI-generated key takeaway, so that I understand the data boundary in plain language.
 26. As a privacy-conscious researcher, I want the disclosure to state the provider's possible abuse-log retention, so that it is accurate rather than reassuringly vague.
 27. As a beta tester, I want one-use invite activation, so that setup is simple without creating an account.
 28. As a beta tester, I want feedback access from the popup, so that I can report a bad name or unsupported source.
@@ -52,7 +52,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 32. As the product owner, I want model credentials kept only in Worker secrets, so that they cannot be extracted from the extension.
 33. As the product owner, I want invite codes stored as hashes and usable once, so that beta access is controlled.
 34. As the product owner, I want unsupported and ambiguous downloads measured as typed fallback outcomes, so that reliability problems are diagnosable without collecting paper content.
-35. As the product owner, I want a truthful $9 Pro interest action, so that willingness to pay is tested without fake checkout or unavailable promises.
+35. As the product owner, I want a truthful coffee-sized encouragement action, so that testers can express support without fake checkout or unavailable pricing promises.
 36. As the product owner, I want the MVP to cover representative journal, repository, preprint, and engineering sources, so that cross-discipline usefulness is tested.
 37. As the product owner, I want automated extension and backend tests, so that publisher-specific fixes do not silently break core naming.
 38. As the product owner, I want an offline fixture suite, so that tests are deterministic and do not scrape live publisher sites during every run.
@@ -89,9 +89,10 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Limit the beta to 30 gist requests per bearer token per UTC calendar month. Count concurrent calls atomically before invoking the model. Do not refund provider failures, preventing retry abuse.
 - Hash invite codes and bearer tokens in D1. Never persist titles, abstracts, identifiers, URLs, filenames, or generated gists. Application logs must omit request bodies.
 - Store opt-in telemetry only as aggregate counters keyed by day, extension version, preset, outcome, reason, and latency bucket; never store an installation identifier with telemetry.
-- The popup exposes preset, enabled state, remaining gist quota, last local outcome, privacy/feedback links, telemetry choice, and an honest planned-Pro interest action. It does not maintain a paper library or download history.
+- The popup exposes its current-page readiness before the filename-format selector, uses color and icons to distinguish ready, unavailable, and needs-attention states, and describes each format with replaceable-field notation plus a concrete example.
+- The popup also exposes enabled state, remaining key-takeaway quota, the latest generated filename with a copy action, privacy/feedback links, a plain-language telemetry choice, and an honest coffee-sized encouragement action. It does not maintain a paper library or download history.
 - The private beta listing uses the product name `Papername BETA`, includes the required testing disclosure, and is restricted to trusted testers. Each tester receives a separate one-use API invite.
-- The future price hypothesis is $9 once for custom metadata templates and custom gist instructions, with a visible 300-generation monthly ceiling. Payments, accounts, license enforcement, and the custom editor are not part of this implementation.
+- Custom metadata templates, custom key-takeaway instructions, pricing, payments, accounts, license enforcement, and the custom editor are deferred until after the beta.
 
 ## Testing Decisions
 
@@ -120,7 +121,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 
 ## Further Notes
 
-- The MVP is deliberately a two-week, non-revenue beta. The planned-Pro action tests the $9 hypothesis before billing work begins.
+- The MVP is deliberately a two-week, non-revenue beta. Pricing and paid customization will be explored separately after the core renaming experience is validated.
 - The model provider does not use API inputs for training by default, but standard abuse-monitoring logs may retain customer content for up to 30 days. Consent and privacy copy must state that accurately.
 - Chrome controls filename conflict behavior. Papername must not request filesystem access merely to customize collisions.
 - Local generic metadata extraction, Google Scholar result capture, and narrow route recovery add no per-request API or LLM cost. Required all-site access creates a stronger Chrome install warning and higher disclosure/review burden. Institutional customizations, paywalls, anti-bot systems, session-bound or opaque redirects, scanned PDFs, and missing metadata prevent literal universality; those cases must remain unchanged with an actionable explanation.
