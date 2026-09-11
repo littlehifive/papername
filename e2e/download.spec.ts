@@ -591,3 +591,55 @@ test("captures a proxied PDF from the selected Google Scholar result", async () 
     await context.close();
   }
 });
+
+test("captures a PDF on a localized Google Scholar citation detail page", async () => {
+  const { context, worker } = await launchExtension();
+  const scholarUrl =
+    "https://scholar.google.com/citations?view_op=view_citation&hl=zh-CN&user=USNXsZEAAAAJ&citation_for_view=USNXsZEAAAAJ:fPk4N6BV_jEC";
+  const wileyPdf =
+    "https://spssi.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/josi.12415";
+  try {
+    await context.route("https://scholar.google.com/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: `<div id="gsc_oci_title_wrapper">
+          <div id="gsc_oci_title_gg"><div class="gsc_oci_title_ggi">
+            <a id="pdf" href="${wileyPdf}"><span>[PDF]</span> 来自 wiley.com</a>
+          </div></div>
+          <div id="gsc_oci_title"><a>A meta-analysis of the effect of values affirmation on academic achievement</a></div>
+        </div>
+        <div id="gsc_oci_table">
+          <div class="gs_scl"><div class="gsc_oci_field">作者</div><div class="gsc_oci_value">Zezhen Wu, Thees F Spreckelsen, Geoffrey L Cohen</div></div>
+          <div class="gs_scl"><div class="gsc_oci_field">发表日期</div><div class="gsc_oci_value">2021/1/14</div></div>
+          <div class="gs_scl"><div class="gsc_oci_field">简介</div><div class="gsc_oci_value" id="gsc_oci_descr">Study abstract.</div></div>
+        </div>`,
+      }),
+    );
+    const page = await context.newPage();
+    await page.goto(scholarUrl);
+    await waitForArticleContext(worker);
+
+    const contexts = await worker.evaluate(async () =>
+      Object.values(await chrome.storage.session.get(null)),
+    );
+    expect(contexts[0]).toMatchObject({
+      pageUrl: scholarUrl,
+      metadata: {
+        title:
+          "A meta-analysis of the effect of values affirmation on academic achievement",
+        authors: [
+          { familyName: "Wu" },
+          { familyName: "Spreckelsen" },
+          { familyName: "Cohen" },
+        ],
+        year: "2021",
+        identifiers: { doi: "10.1111/josi.12415" },
+        pdfUrls: [wileyPdf],
+        sourceAdapter: "google-scholar",
+      },
+    });
+  } finally {
+    await context.close();
+  }
+});

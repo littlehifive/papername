@@ -1,8 +1,11 @@
 import { firstClassSourceForUrl } from "@papername/core";
 
 import { ARTICLE_EXCLUDE_MATCHES, ARTICLE_MATCHES } from "../src/hosts";
-import { googleScholarContextForLink } from "../src/google-scholar";
-import { publishPageContext } from "../src/page-capture";
+import {
+  googleScholarContextForLink,
+  googleScholarContextForPage,
+} from "../src/google-scholar";
+import { publishPageContext, type ContextMessage } from "../src/page-capture";
 
 export default defineContentScript({
   matches: [...ARTICLE_MATCHES],
@@ -13,12 +16,23 @@ export default defineContentScript({
     let publishedSignature: string | undefined;
 
     const publish = (force = false) => {
-      void publishPageContext(document, location.href, async (message) => {
+      const send = async (message: ContextMessage) => {
         const signature = JSON.stringify(message);
         if (!force && signature === publishedSignature) return;
         await chrome.runtime.sendMessage(message);
         publishedSignature = signature;
-      }).catch(() => undefined);
+      };
+      const scholarContext = googleScholarContextForPage(
+        document,
+        location.href,
+      );
+      if (scholarContext) {
+        void send(scholarContext).catch(() => undefined);
+        return;
+      }
+      void publishPageContext(document, location.href, send).catch(
+        () => undefined,
+      );
     };
 
     const schedule = () => {

@@ -75,4 +75,58 @@ describe("Google Scholar result context", () => {
       googleScholarContextForLink(link, "https://scholar.google.co.uk/"),
     ).toBeDefined();
   });
+
+  it("captures a PDF opened from a localized Scholar citation detail page", () => {
+    const window = new Window({
+      url: "https://scholar.google.com/citations?view_op=view_citation&hl=zh-CN&user=USNXsZEAAAAJ&citation_for_view=USNXsZEAAAAJ:fPk4N6BV_jEC",
+    });
+    window.document.write(`
+      <div id="gsc_oci_title_wrapper">
+        <div id="gsc_oci_title_gg">
+          <div class="gsc_oci_title_ggi">
+            <a id="pdf" href="https://spssi.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/josi.12415">
+              <span class="gsc_vcd_title_ggt">[PDF]</span> 来自 wiley.com
+            </a>
+          </div>
+          <div class="gsc_oci_title_ggi">
+            <a href="https://spssi.onlinelibrary.wiley.com/doi/full/10.1111/josi.12415">Full View</a>
+          </div>
+        </div>
+        <div id="gsc_oci_title">
+          <a class="gsc_oci_title_link" href="https://spssi.onlinelibrary.wiley.com/doi/abs/10.1111/josi.12415">
+            A meta-analysis of the effect of values affirmation on academic achievement
+          </a>
+        </div>
+      </div>
+      <div id="gsc_oci_table">
+        <div class="gs_scl"><div class="gsc_oci_field">作者</div><div class="gsc_oci_value">Zezhen Wu, Thees F Spreckelsen, Geoffrey L Cohen</div></div>
+        <div class="gs_scl"><div class="gsc_oci_field">发表日期</div><div class="gsc_oci_value">2021/1/14</div></div>
+        <div class="gs_scl"><div class="gsc_oci_field">期刊</div><div class="gsc_oci_value">Journal of Social Issues</div></div>
+        <div class="gs_scl"><div class="gsc_oci_field">简介</div><div class="gsc_oci_value" id="gsc_oci_descr">Study abstract.</div></div>
+      </div>
+    `);
+    const document = window.document as unknown as Document;
+    const link = document.querySelector<HTMLAnchorElement>("#pdf")!;
+
+    expect(googleScholarContextForLink(link, document.URL)).toEqual({
+      type: "papername:context",
+      pageUrl: document.URL,
+      metadata: {
+        title:
+          "A meta-analysis of the effect of values affirmation on academic achievement",
+        authors: [
+          { name: "Zezhen Wu", familyName: "Wu" },
+          { name: "Thees F Spreckelsen", familyName: "Spreckelsen" },
+          { name: "Geoffrey L Cohen", familyName: "Cohen" },
+        ],
+        year: "2021",
+        abstract: "Study abstract.",
+        identifiers: { doi: "10.1111/josi.12415" },
+        pdfUrls: [
+          "https://spssi.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/josi.12415",
+        ],
+        sourceAdapter: "google-scholar",
+      },
+    });
+  });
 });
