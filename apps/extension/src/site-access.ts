@@ -1,4 +1,8 @@
-import { firstClassSourceForUrl } from "@papername/core";
+import {
+  elsevierPiiRoute,
+  firstClassSourceForUrl,
+  publisherDoiRoute,
+} from "@papername/core";
 
 import { isExcludedArticleHostname } from "./hosts";
 import { landingPageCandidates } from "./repository-routes";
@@ -40,6 +44,8 @@ export function siteAccessForUrl(pageUrl: string | undefined): SiteAccess {
       hostname: url.hostname,
       directPdf:
         /\.pdf(?:$|[?#])/i.test(pageUrl) ||
+        Boolean(publisherDoiRoute(pageUrl)?.reader) ||
+        Boolean(elsevierPiiRoute(pageUrl)?.reader) ||
         landingPageCandidates(pageUrl).length > 0,
       ...(source ? { sourceName: source.label } : {}),
     };

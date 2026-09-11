@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   contextSupportsCurrentPage,
   findMatchingContext,
+  findMatchingPageContext,
   type ArticleContext,
   type DownloadCandidate,
   type PaperMetadata,
@@ -167,6 +168,69 @@ describe("eligible download association", () => {
         now,
       ),
     ).toBe(context);
+  });
+
+  it("matches ScienceDirect's signed main-PDF asset to the article PII", () => {
+    const scienceDirectContext: ArticleContext = {
+      ...context,
+      pageUrl:
+        "https://www.sciencedirect.com/science/article/pii/S0047272725001446",
+      metadata: {
+        ...metadata,
+        identifiers: { doi: "10.1016/j.jpubeco.2025.105446" },
+        pdfUrls: [
+          "https://www.sciencedirect.com/science/article/pii/S0047272725001446/pdfft",
+        ],
+        sourceAdapter: "elsevier",
+      },
+    };
+    const assetUrl =
+      "https://pdf.sciencedirectassets.com/271705/1-s2.0-S0047272725X00086/1-s2.0-S0047272725001446/main.pdf?X-Amz-Signature=temporary";
+
+    expect(
+      findMatchingPageContext(
+        [scienceDirectContext],
+        { tabId: 12, url: assetUrl },
+        now,
+      ),
+    ).toBe(scienceDirectContext);
+    expect(
+      findMatchingContext(
+        [scienceDirectContext],
+        download({
+          url: assetUrl,
+          filename: "main.pdf",
+          tabId: 12,
+          referrer: undefined,
+        }),
+        now,
+      ),
+    ).toBe(scienceDirectContext);
+  });
+
+  it("rejects a different ScienceDirect PII and supplementary asset", () => {
+    const scienceDirectContext: ArticleContext = {
+      ...context,
+      pageUrl:
+        "https://www.sciencedirect.com/science/article/pii/S0047272725001446",
+      metadata: { ...metadata, sourceAdapter: "elsevier", pdfUrls: [] },
+    };
+    for (const url of [
+      "https://pdf.sciencedirectassets.com/path/1-s2.0-S0047272725009999/main.pdf",
+      "https://pdf.sciencedirectassets.com/path/1-s2.0-S0047272725001446/mmc1.pdf",
+    ]) {
+      expect(
+        findMatchingContext(
+          [scienceDirectContext],
+          download({
+            url,
+            filename: url.split("/").at(-1),
+            referrer: undefined,
+          }),
+          now,
+        ),
+      ).toBeUndefined();
+    }
   });
 
   it("matches a known PDF nested in Chrome's internal PDF viewer URL", () => {

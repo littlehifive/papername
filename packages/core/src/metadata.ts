@@ -1,5 +1,6 @@
 import type { PaperAuthor, PaperMetadata } from "./types";
 import { firstClassSourceForUrl } from "./sources";
+import { publisherDoiRoute } from "./publisher-routes";
 
 const CORPORATE_AUTHOR =
   /(consortium|collaboration|group|team|committee|university|institute|association|society)$/i;
@@ -145,6 +146,34 @@ function pdfUrlsFromJson(value: unknown, pageUrl: string): string[] {
   });
 }
 
+function osfViewerPdfUrls(document: Document, pageUrl: string): string[] {
+  if (sourceAdapterForUrl(pageUrl) !== "osf") return [];
+  const candidates = [
+    ...document.querySelectorAll('iframe[src*="mfr.osf.io/render"]'),
+  ].flatMap((node): string[] => {
+    try {
+      const viewer = new URL(node.getAttribute("src") ?? "", pageUrl);
+      if (viewer.hostname !== "mfr.osf.io" || viewer.pathname !== "/render")
+        return [];
+      const nestedValue = viewer.searchParams.get("url");
+      if (!nestedValue) return [];
+      const nested = new URL(nestedValue, pageUrl);
+      if (
+        nested.hostname !== "osf.io" ||
+        !/^\/download\/[a-f0-9]{24}\/?$/i.test(nested.pathname)
+      )
+        return [];
+      nested.search = "";
+      nested.hash = "";
+      return [nested.href];
+    } catch {
+      return [];
+    }
+  });
+  const unique = [...new Set(candidates)];
+  return unique.length === 1 ? unique : [];
+}
+
 export function sourceAdapterForUrl(pageUrl: string): string | undefined {
   return firstClassSourceForUrl(pageUrl)?.id;
 }
@@ -195,6 +224,197 @@ function arxivFallback(
   };
 }
 
+function scienceDirectAuthors(
+  document: Document,
+  pageUrl: string,
+): PaperAuthor[] {
+  if (sourceAdapterForUrl(pageUrl) !== "elsevier") return [];
+  return [
+    ...document.querySelectorAll(".author-group .react-xocs-alternative-link"),
+  ].flatMap((node): PaperAuthor[] => {
+    const givenName = clean(node.querySelector(".given-name")?.textContent);
+    const familyName = clean(node.querySelector(".surname")?.textContent);
+    if (!familyName) return [];
+    const name = clean([givenName, familyName].filter(Boolean).join(" "));
+    return name ? [{ name, familyName }] : [];
+  });
+}
+
+function acmAuthors(document: Document, pageUrl: string): PaperAuthor[] {
+  if (sourceAdapterForUrl(pageUrl) !== "acm") return [];
+  return [
+    ...document.querySelectorAll('[data-db-target-for^="axel_author_"]'),
+  ].flatMap((node): PaperAuthor[] => {
+    const givenName = clean(
+      node.querySelector('[property="givenName"]')?.textContent,
+    );
+    const familyName = clean(
+      node.querySelector('[property="familyName"]')?.textContent,
+    );
+    if (!familyName) return [];
+    const name = clean([givenName, familyName].filter(Boolean).join(" "));
+    return name ? [{ name, familyName }] : [];
+  });
+}
+
+function researchSquareAuthors(
+  document: Document,
+  pageUrl: string,
+): PaperAuthor[] {
+  if (sourceAdapterForUrl(pageUrl) !== "research-square") return [];
+  try {
+    const parsed: unknown = JSON.parse(
+      document.querySelector("script#__NEXT_DATA__")?.textContent ?? "",
+    );
+    if (!parsed || typeof parsed !== "object") return [];
+    const props = (parsed as Record<string, unknown>).props;
+    if (!props || typeof props !== "object") return [];
+    const pageProps = (props as Record<string, unknown>).pageProps;
+    if (!pageProps || typeof pageProps !== "object") return [];
+    const initialData = (pageProps as Record<string, unknown>).initialData;
+    if (!initialData || typeof initialData !== "object") return [];
+    const value = (initialData as Record<string, unknown>).authors;
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item): PaperAuthor[] => {
+      if (!item || typeof item !== "object") return [];
+      const record = item as Record<string, unknown>;
+      const name = clean(typeof record.name === "string" ? record.name : "");
+      if (!name) return [];
+      const familyName = clean(
+        typeof record.lastName === "string" ? record.lastName : "",
+      );
+      return [
+        { name, familyName: familyName ?? authorFromName(name).familyName },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function pubMedAuthors(document: Document, pageUrl: string): PaperAuthor[] {
+  try {
+    if (new URL(pageUrl).hostname !== "pubmed.ncbi.nlm.nih.gov") return [];
+  } catch {
+    return [];
+  }
+  const seen = new Set<string>();
+  return [
+    ...document.querySelectorAll('a.full-name[href*="cauthor_id="]'),
+  ].flatMap((node): PaperAuthor[] => {
+    const name = clean(node.textContent);
+    if (!name || seen.has(name)) return [];
+    seen.add(name);
+    return [authorFromName(name)];
+  });
+}
+
+function jsonObjectAfterMarker(
+  text: string,
+  marker: string,
+): Record<string, unknown> | undefined {
+  const markerIndex = text.indexOf(marker);
+  if (markerIndex < 0) return undefined;
+  const start = text.indexOf("{", markerIndex + marker.length);
+  if (start < 0) return undefined;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth !== 0) continue;
+      try {
+        const parsed: unknown = JSON.parse(text.slice(start, index + 1));
+        return parsed && typeof parsed === "object"
+          ? (parsed as Record<string, unknown>)
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+function ieeeDocumentMetadata(
+  document: Document,
+  pageUrl: string,
+): Partial<PaperMetadata> {
+  if (sourceAdapterForUrl(pageUrl) !== "ieee") return {};
+  const payload = [...document.scripts]
+    .map((script) =>
+      jsonObjectAfterMarker(
+        script.textContent ?? "",
+        "xplGlobal.document.metadata=",
+      ),
+    )
+    .find(Boolean);
+  if (!payload) return {};
+
+  const title = clean(
+    typeof payload.formulaStrippedArticleTitle === "string"
+      ? payload.formulaStrippedArticleTitle
+      : typeof payload.displayDocTitle === "string"
+        ? payload.displayDocTitle
+        : typeof payload.title === "string"
+          ? payload.title
+          : undefined,
+  );
+  const authors = Array.isArray(payload.authors)
+    ? payload.authors.flatMap((item): PaperAuthor[] => {
+        if (!item || typeof item !== "object") return [];
+        const record = item as Record<string, unknown>;
+        const name = clean(
+          typeof record.name === "string" ? record.name : undefined,
+        );
+        if (!name) return [];
+        const familyName = clean(
+          typeof record.lastName === "string" ? record.lastName : undefined,
+        );
+        return [
+          { name, familyName: familyName ?? authorFromName(name).familyName },
+        ];
+      })
+    : [];
+  const year = yearFrom(
+    clean(
+      typeof payload.publicationYear === "string"
+        ? payload.publicationYear
+        : typeof payload.displayPublicationDate === "string"
+          ? payload.displayPublicationDate
+          : undefined,
+    ),
+  );
+  const doi = normalizeDoi(payload.doi);
+  const pdfPath =
+    typeof payload.pdfPath === "string" &&
+    /\.pdf(?:$|[?#])/i.test(payload.pdfPath)
+      ? absoluteUrl(payload.pdfPath, pageUrl)
+      : undefined;
+
+  return {
+    ...(title ? { title } : {}),
+    ...(authors.length ? { authors } : {}),
+    ...(year ? { year } : {}),
+    identifiers: doi ? { doi } : {},
+    pdfUrls: pdfPath ? [pdfPath] : [],
+  };
+}
+
 export function extractPaperMetadata(
   document: Document,
   pageUrl: string,
@@ -203,6 +423,7 @@ export function extractPaperMetadata(
   const sourceAdapter =
     sourceAdapterForUrl(pageUrl) ?? platformAdapterForDocument(document);
   const arxiv = arxivFallback(document, pageUrl);
+  const ieee = ieeeDocumentMetadata(document, pageUrl);
 
   const title =
     firstMeta(document, [
@@ -219,7 +440,8 @@ export function extractPaperMetadata(
           ? article.name
           : undefined,
     ) ??
-    arxiv.title;
+    arxiv.title ??
+    ieee.title;
   if (!title) return undefined;
 
   const metaAuthors = metaValues(document, [
@@ -229,11 +451,26 @@ export function extractPaperMetadata(
     "eprints.creators_name",
     "bepress_citation_author",
   ]).map(authorFromName);
-  const authors = metaAuthors.length
-    ? metaAuthors
-    : authorsFromJson(article?.author).length
-      ? authorsFromJson(article?.author)
-      : (arxiv.authors ?? []);
+  const renderedScienceDirectAuthors = scienceDirectAuthors(document, pageUrl);
+  const renderedAcmAuthors = acmAuthors(document, pageUrl);
+  const renderedResearchSquareAuthors = researchSquareAuthors(
+    document,
+    pageUrl,
+  );
+  const renderedPubMedAuthors = pubMedAuthors(document, pageUrl);
+  const authors = renderedAcmAuthors.length
+    ? renderedAcmAuthors
+    : metaAuthors.length
+      ? metaAuthors
+      : authorsFromJson(article?.author).length
+        ? authorsFromJson(article?.author)
+        : renderedScienceDirectAuthors.length
+          ? renderedScienceDirectAuthors
+          : renderedResearchSquareAuthors.length
+            ? renderedResearchSquareAuthors
+            : renderedPubMedAuthors.length
+              ? renderedPubMedAuthors
+              : (arxiv.authors ?? ieee.authors ?? []);
   const abstract =
     firstMeta(document, [
       "citation_abstract",
@@ -257,6 +494,7 @@ export function extractPaperMetadata(
       "dc.date",
       "dcterms.issued",
       "article:published_time",
+      "article:published_time - datetime",
       "eprints.date",
       "bepress_citation_date",
     ]) ??
@@ -264,7 +502,8 @@ export function extractPaperMetadata(
       typeof article?.datePublished === "string"
         ? article.datePublished
         : undefined,
-    );
+    ) ??
+    ieee.year;
   const rawIdentifiers: unknown[] = [
     ...metaValues(document, [
       "citation_doi",
@@ -274,10 +513,12 @@ export function extractPaperMetadata(
     ...(Array.isArray(article?.identifier)
       ? article.identifier
       : [article?.identifier]),
+    ieee.identifiers?.doi,
   ];
-  const doi = rawIdentifiers
-    .map((identifier) => normalizeDoi(identifier))
-    .find(Boolean);
+  const doi =
+    rawIdentifiers
+      .map((identifier) => normalizeDoi(identifier))
+      .find(Boolean) ?? publisherDoiRoute(pageUrl)?.doi;
   const citationPdf = absoluteUrl(
     firstMeta(document, ["citation_pdf_url", "bepress_citation_pdf_url"]),
     pageUrl,
@@ -303,9 +544,17 @@ export function extractPaperMetadata(
   const identifierPdfUrls =
     identifierPdfCandidates.length === 1 ? identifierPdfCandidates : [];
   const jsonPdfUrls = pdfUrlsFromJson(article?.encoding, pageUrl);
+  const osfPdfUrls = osfViewerPdfUrls(document, pageUrl);
   const linkedPdfUrls = [
     ...document.querySelectorAll('link[type="application/pdf"], a[href]'),
   ].flatMap((node): string[] => {
+    // References are PDFs of other papers, not alternate files for this one.
+    if (
+      node.closest(
+        '[role="doc-bibliography"], [role="doc-biblioentry"], [id^="bibr"], #references, .references, .ref-list, .bibliography',
+      )
+    )
+      return [];
     const href = node.getAttribute("href");
     const label = clean(node.textContent) ?? "";
     if (
@@ -325,6 +574,8 @@ export function extractPaperMetadata(
         citationPdf,
         ...identifierPdfUrls,
         ...jsonPdfUrls,
+        ...osfPdfUrls,
+        ...(ieee.pdfUrls ?? []),
         ...(arxiv.pdfUrls ?? []),
         ...linkedPdfUrls,
       ].filter((url): url is string => Boolean(url)),

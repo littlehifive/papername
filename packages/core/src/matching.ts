@@ -1,4 +1,9 @@
 import type { ArticleContext, DownloadCandidate } from "./types";
+import {
+  elsevierPiiRoute,
+  publisherDoiRoute,
+  researchSquarePaperRoute,
+} from "./publisher-routes";
 
 const CONTEXT_TTL_MS = 30 * 60_000;
 const SUPPLEMENT_PATTERN =
@@ -35,6 +40,41 @@ function canonicalUrl(value: string | undefined): string | undefined {
   }
 }
 
+function osfPrimaryFileId(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.hostname !== "osf.io") return undefined;
+    return url.pathname.match(/^\/download\/([a-f0-9]{24})\/?$/i)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function urlsIdentifySamePdf(left: string, right: string): boolean {
+  if (canonicalUrl(left) === canonicalUrl(right)) return true;
+  const leftOsfId = osfPrimaryFileId(left);
+  return Boolean(leftOsfId && leftOsfId === osfPrimaryFileId(right));
+}
+
+function isOsfSignedStorageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.hostname !== "storage.googleapis.com") return false;
+    if (!/^\/cos-osf-prod-files-[^/]+\/[a-f0-9]{40,}$/i.test(url.pathname))
+      return false;
+    const disposition = url.searchParams.get("response-content-disposition");
+    const accessId = url.searchParams.get("GoogleAccessId");
+    return Boolean(
+      disposition &&
+      /filename\*?=.*\.pdf(?:["';]|$)/i.test(disposition) &&
+      accessId?.endsWith("@cos-osf-prod.iam.gserviceaccount.com"),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isFreshContext(context: ArticleContext, now: number): boolean {
   return (
     now - context.capturedAt <= CONTEXT_TTL_MS &&
@@ -47,16 +87,59 @@ export function contextSupportsCurrentPage(
   page: { tabId: number; url: string },
   now = Date.now(),
 ): boolean {
-  if (context.tabId !== page.tabId || !isFreshContext(context, now))
-    return false;
+  if (!isFreshContext(context, now)) return false;
   const currentUrl = canonicalUrl(page.url);
+  const route = publisherDoiRoute(page.url);
+  const articleRoute = publisherDoiRoute(context.pageUrl);
+  const elsevierRoute = elsevierPiiRoute(page.url);
+  const articleElsevierRoute = elsevierPiiRoute(context.pageUrl);
+  const researchSquareRoute = researchSquarePaperRoute(page.url);
+  const articleResearchSquareRoute = researchSquarePaperRoute(context.pageUrl);
+  const samePublisherReader = Boolean(
+    route?.reader &&
+    articleRoute?.origin === route.origin &&
+    context.metadata.identifiers.doi?.toLowerCase() === route.doi,
+  );
+  const sameElsevierMainPdf = Boolean(
+    elsevierRoute?.reader && articleElsevierRoute?.pii === elsevierRoute.pii,
+  );
+  const sameResearchSquarePdf = Boolean(
+    researchSquareRoute?.reader &&
+    articleResearchSquareRoute?.identity === researchSquareRoute.identity,
+  );
   return (
     Boolean(currentUrl) &&
-    (canonicalUrl(context.pageUrl) === currentUrl ||
-      context.metadata.pdfUrls.some(
-        (pdfUrl) => canonicalUrl(pdfUrl) === currentUrl,
+    ((context.tabId === page.tabId &&
+      canonicalUrl(context.pageUrl) === currentUrl) ||
+      samePublisherReader ||
+      sameElsevierMainPdf ||
+      sameResearchSquarePdf ||
+      context.metadata.pdfUrls.some((pdfUrl) =>
+        urlsIdentifySamePdf(pdfUrl, page.url),
       ))
   );
+}
+
+function contextIdentity(context: ArticleContext): string {
+  return (
+    context.metadata.identifiers.doi ??
+    context.metadata.identifiers.arxivId ??
+    context.metadata.identifiers.pmid ??
+    context.metadata.title.trim().toLocaleLowerCase()
+  );
+}
+
+/** Readiness must reject the same ambiguous identities as download naming. */
+export function findMatchingPageContext(
+  contexts: ArticleContext[],
+  page: { tabId: number; url: string },
+  now = Date.now(),
+): ArticleContext | undefined {
+  const matches = contexts.filter((context) =>
+    contextSupportsCurrentPage(context, page, now),
+  );
+  if (new Set(matches.map(contextIdentity)).size !== 1) return undefined;
+  return matches.sort((a, b) => b.capturedAt - a.capturedAt)[0];
 }
 
 function candidateUrls(download: DownloadCandidate): string[] {
@@ -104,9 +187,10 @@ function exactKnownPdf(
   context: ArticleContext,
   download: DownloadCandidate,
 ): boolean {
-  const candidates = candidateUrls(download).map(canonicalUrl).filter(Boolean);
   return context.metadata.pdfUrls.some((known) =>
-    candidates.includes(canonicalUrl(known)),
+    candidateUrls(download).some((candidate) =>
+      urlsIdentifySamePdf(known, candidate),
+    ),
   );
 }
 
@@ -132,6 +216,50 @@ function containsIdentifier(
   );
 }
 
+function matchesElsevierMainPdf(
+  context: ArticleContext,
+  download: DownloadCandidate,
+): boolean {
+  const articleRoute = elsevierPiiRoute(context.pageUrl);
+  if (!articleRoute) return false;
+  return candidateUrls(download).some((value) => {
+    const route = elsevierPiiRoute(value);
+    return route?.reader && route.pii === articleRoute.pii;
+  });
+}
+
+function matchesResearchSquarePdf(
+  context: ArticleContext,
+  download: DownloadCandidate,
+): boolean {
+  const articleRoute = researchSquarePaperRoute(context.pageUrl);
+  if (!articleRoute) return false;
+  return candidateUrls(download).some((value) => {
+    const route = researchSquarePaperRoute(value);
+    return route?.reader && route.identity === articleRoute.identity;
+  });
+}
+
+function matchesOsfSignedPrimary(
+  context: ArticleContext,
+  download: DownloadCandidate,
+): boolean {
+  let referrerOrigin: string | undefined;
+  try {
+    referrerOrigin = download.referrer
+      ? new URL(download.referrer).origin
+      : undefined;
+  } catch {
+    return false;
+  }
+  return Boolean(
+    referrerOrigin === "https://osf.io" &&
+    context.metadata.sourceAdapter === "osf" &&
+    context.metadata.pdfUrls.some((value) => osfPrimaryFileId(value)) &&
+    candidateUrls(download).some(isOsfSignedStorageUrl),
+  );
+}
+
 function scoreContext(
   context: ArticleContext,
   download: DownloadCandidate,
@@ -150,6 +278,9 @@ function scoreContext(
     download.tabId >= 0 &&
     download.tabId === context.tabId;
   if (exact) return sameTab ? 110 : 100;
+  if (matchesElsevierMainPdf(context, download)) return 95;
+  if (matchesResearchSquarePdf(context, download)) return 95;
+  if (matchesOsfSignedPrimary(context, download)) return 95;
   if (containsIdentifier(context, download)) return 90;
 
   const sameReferrer =
@@ -176,15 +307,10 @@ export function findMatchingContext(
     );
   const [first] = ranked;
   if (!first) return undefined;
-  const identity = (candidate: ArticleContext) =>
-    candidate.metadata.identifiers.doi ??
-    candidate.metadata.identifiers.arxivId ??
-    candidate.metadata.identifiers.pmid ??
-    candidate.metadata.title.trim().toLocaleLowerCase();
   const topIdentities = new Set(
     ranked
       .filter(({ score }) => score === first.score)
-      .map(({ context: candidate }) => identity(candidate)),
+      .map(({ context: candidate }) => contextIdentity(candidate)),
   );
   if (topIdentities.size > 1) {
     return undefined;

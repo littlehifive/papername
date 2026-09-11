@@ -10,16 +10,24 @@ export default defineContentScript({
   runAt: "document_idle",
   main(context) {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let publishedSignature: string | undefined;
 
-    const publish = () => {
-      void publishPageContext(document, location.href, (message) =>
-        chrome.runtime.sendMessage(message),
-      );
+    const publish = (force = false) => {
+      void publishPageContext(document, location.href, async (message) => {
+        const signature = JSON.stringify(message);
+        if (!force && signature === publishedSignature) return;
+        await chrome.runtime.sendMessage(message);
+        publishedSignature = signature;
+      }).catch(() => undefined);
     };
 
     const schedule = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(publish, 250);
+      // A trailing debounce can wait forever on readers with animations or ads.
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        publish();
+      }, 250);
     };
 
     publish();
@@ -31,9 +39,8 @@ export default defineContentScript({
       observer.observe(observationTarget, {
         childList: true,
         subtree: true,
-        ...(observationTarget === document.head
-          ? { attributes: true, attributeFilter: ["content", "href"] }
-          : {}),
+        attributes: true,
+        attributeFilter: ["content", "href"],
       });
     }
     const refresh = (message: unknown) => {
@@ -43,7 +50,7 @@ export default defineContentScript({
         "type" in message &&
         message.type === "papername:refresh-context"
       ) {
-        publish();
+        publish(true);
       }
     };
     chrome.runtime.onMessage.addListener(refresh);

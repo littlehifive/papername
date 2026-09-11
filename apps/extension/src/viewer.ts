@@ -5,10 +5,14 @@ const ADOBE_DOWNLOAD_URL = new RegExp(
   `^(?:(?:blob|filesystem):)?chrome-extension://${ADOBE_ACROBAT_EXTENSION_ID}(?:/|$)`,
   "i",
 );
+const ADOBE_HOSTED_VIEWER_URL =
+  /^(?:blob:)?https:\/\/acrobat\.adobe\.com\/(?:dc-chrome-extension\/)?/i;
 
 export function isAdobeAcrobatDownload(download: DownloadCandidate): boolean {
   return [download.url, download.finalUrl, download.referrer].some((value) =>
-    ADOBE_DOWNLOAD_URL.test(value ?? ""),
+    [ADOBE_DOWNLOAD_URL, ADOBE_HOSTED_VIEWER_URL].some((pattern) =>
+      pattern.test(value ?? ""),
+    ),
   );
 }
 

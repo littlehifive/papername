@@ -75,6 +75,117 @@ async function waitForArticleContext(worker: Worker): Promise<void> {
     .toBe(1);
 }
 
+test("an open popup updates when late article metadata arrives", async () => {
+  const { context, extensionId, worker } = await launchExtension();
+  try {
+    await context.route("https://www.jstor.org/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<head></head><body><p>Loading article</p></body>",
+      }),
+    );
+    const page = await context.newPage();
+    await page.goto(articleUrl);
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.bringToFront();
+    await popup.reload();
+    await expect(popup.locator("#site-access-label")).toHaveText(
+      "No paper found yet",
+    );
+    await page.evaluate((markup) => {
+      document.head.innerHTML = markup;
+    }, article);
+    await waitForArticleContext(worker);
+    await expect(popup.locator("#site-access-label")).toHaveText(
+      "Ready to rename",
+      { timeout: 1500 },
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("continuous page mutations do not starve late metadata capture", async () => {
+  const { context, worker } = await launchExtension();
+  try {
+    await context.route("https://www.jstor.org/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<head></head><body><p>Loading article</p></body>",
+      }),
+    );
+    const page = await context.newPage();
+    await page.goto(articleUrl);
+    // A popup-style refresh confirms the content script has installed its listener.
+    await worker.evaluate(async () => {
+      const tabs = await chrome.tabs.query({ url: "https://www.jstor.org/*" });
+      await chrome.tabs.sendMessage(tabs[0]!.id!, {
+        type: "papername:refresh-context",
+      });
+    });
+    await page.evaluate(
+      (markup) => {
+        document.head.innerHTML = markup;
+        const timer = setInterval(() => {
+          document.querySelector("p")!.textContent = String(performance.now());
+        }, 50);
+        setTimeout(() => clearInterval(timer), 5000);
+      },
+      article.replace(/<a[\s\S]+/, ""),
+    );
+    await expect
+      .poll(
+        () =>
+          worker.evaluate(async () => {
+            return Object.keys(await chrome.storage.session.get(null)).filter(
+              (k) => k.startsWith("articleContext:"),
+            ).length;
+          }),
+        { timeout: 1500 },
+      )
+      .toBe(1);
+  } finally {
+    await context.close();
+  }
+});
+
+test("repeated popup opens stay responsive after a service-worker stop", async () => {
+  const { context, extensionId, worker } = await launchExtension();
+  try {
+    await routePaper(context);
+    const page = await context.newPage();
+    await page.goto(articleUrl);
+    await waitForArticleContext(worker);
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const popup = await context.newPage();
+      await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+      await page.bringToFront();
+      await popup.reload();
+      await expect(popup.locator("#site-access-label")).toHaveText(
+        "Ready to rename",
+        { timeout: 1000 },
+      );
+      await popup.close();
+    }
+
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("ServiceWorker.enable");
+    await cdp.send("ServiceWorker.stopAllWorkers");
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.bringToFront();
+    await popup.reload();
+    await expect(popup.locator("#site-access-label")).toHaveText(
+      "Ready to rename",
+      { timeout: 1500 },
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("publishes article metadata and registers the browser filename hook", async () => {
   const { context, extensionId, worker } = await launchExtension();
   try {
@@ -301,6 +412,57 @@ test("arXiv still publishes an automatic context for Acrobat PDF matching", asyn
         sourceAdapter: "arxiv",
       },
     });
+  } finally {
+    await context.close();
+  }
+});
+
+test("captures OSF's primary MFR-backed preprint URL", async () => {
+  const { context, worker } = await launchExtension();
+  const osfArticleUrl = "https://osf.io/preprints/psyarxiv/qmh3s_v3";
+  const osfPdfUrl = "https://osf.io/download/6aa17d8ca9afb7bc95af9441/";
+  const viewerUrl = `https://mfr.osf.io/render?url=${encodeURIComponent(`${osfPdfUrl}?direct&mode=render`)}`;
+  try {
+    await context.route("https://mfr.osf.io/**", (route) =>
+      route.fulfill({ contentType: "text/html", body: "<p>PDF viewer</p>" }),
+    );
+    await context.route("https://osf.io/**", (route) => {
+      if (route.request().url() === osfPdfUrl) {
+        return route.fulfill({
+          contentType: "application/pdf",
+          headers: {
+            "content-disposition":
+              'attachment; filename="Clean_Bradyetal_SelectionProblem_Manuscript_preprint.pdf"',
+          },
+          body: "%PDF-1.4\n%%EOF",
+        });
+      }
+      return route.fulfill({
+        contentType: "text/html",
+        body: `<meta name="citation_title" content="Artificial Intelligence Systems Distort Upstream Selection in Human Social Learning">
+          <meta name="citation_author" content="William J. Brady">
+          <meta name="citation_author" content="Chen-Wei Yu">
+          <meta name="citation_author" content="Nicholas Ornstein">
+          <meta name="citation_author" content="Bolun Sun">
+          <meta name="citation_author" content="Joshua Conrad Jackson">
+          <meta name="citation_date" content="2026">
+          <iframe src="${viewerUrl}"></iframe>
+          <a id="download" href="${osfPdfUrl}">Download preprint</a>`,
+      });
+    });
+    const page = await context.newPage();
+    await page.goto(osfArticleUrl);
+    await waitForArticleContext(worker);
+
+    const storedPdfUrls = await worker.evaluate(async () => {
+      const contexts = Object.values(
+        await chrome.storage.session.get(null),
+      ) as Array<{
+        metadata?: { pdfUrls?: string[] };
+      }>;
+      return contexts[0]?.metadata?.pdfUrls;
+    });
+    expect(storedPdfUrls).toEqual([osfPdfUrl]);
   } finally {
     await context.close();
   }

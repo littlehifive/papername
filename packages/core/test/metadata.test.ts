@@ -38,6 +38,28 @@ describe("article-page metadata", () => {
     });
   });
 
+  it("reads ScienceDirect authors from its rendered author group", () => {
+    const document = page(
+      `
+        <meta name="citation_title" content="Climate and migration in the United States">
+        <meta name="citation_doi" content="10.1016/j.jpubeco.2025.105446">
+        <meta name="citation_publication_date" content="2025/09/01">
+        <div class="author-group">
+          <button><span class="react-xocs-alternative-link"><span class="given-name">Patrick</span> <span class="text surname">Baylis</span></span><span class="author-ref"><sup>a</sup></span></button>
+          <button><span class="react-xocs-alternative-link"><span class="given-name">Prashant</span> <span class="text surname">Bharadwaj</span></span><span class="author-ref"><sup>b</sup></span></button>
+          <a><span class="react-xocs-alternative-link"><span class="given-name">Nick</span> <span class="text surname">Obradovich</span></span><span class="author-ref"><sup>c</sup></span></a>
+        </div>
+      `,
+      "https://www.sciencedirect.com/science/article/pii/S0047272725001446",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)?.authors).toEqual([
+      { name: "Patrick Baylis", familyName: "Baylis" },
+      { name: "Prashant Bharadwaj", familyName: "Bharadwaj" },
+      { name: "Nick Obradovich", familyName: "Obradovich" },
+    ]);
+  });
+
   it("falls back to ScholarlyArticle JSON-LD with structured people", () => {
     const document = page(
       `<script type="application/ld+json">${JSON.stringify({
@@ -92,6 +114,125 @@ describe("article-page metadata", () => {
       identifiers: { arxivId: "2609.00001" },
       pdfUrls: ["https://arxiv.org/pdf/2609.00001"],
     });
+  });
+
+  it("extracts OSF's primary file from its MFR viewer URL", () => {
+    const document = page(
+      `<meta name="citation_title" content="Artificial Intelligence Systems Distort Upstream Selection in Human Social Learning">
+       <meta name="citation_author" content="William J. Brady">
+       <meta name="citation_date" content="2026">
+       <iframe src="https://mfr.osf.io/render?url=https%3A%2F%2Fosf.io%2Fdownload%2F6aa17d8ca9afb7bc95af9441%2F%3Fdirect%26mode%3Drender"></iframe>`,
+      "https://osf.io/preprints/psyarxiv/qmh3s_v3",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)?.pdfUrls).toEqual([
+      "https://osf.io/download/6aa17d8ca9afb7bc95af9441/",
+    ]);
+  });
+
+  it("extracts Research Square authors from its Next.js page data", () => {
+    const document = page(
+      `<meta name="citation_title" content="Risk factors for drug-resistant tuberculosis">
+       <meta name="citation_publication_date" content="2026-09-10">
+       <meta name="citation_doi" content="10.21203/rs.3.rs-10663751/v1">
+       <meta name="citation_pdf_url" content="/article/rs-10663751/latest.pdf">
+       <script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+         props: {
+           pageProps: {
+             initialData: {
+               authors: [
+                 { name: "Mathias Ngobi Bogere", lastName: "Bogere" },
+                 { name: "Maxwell Otim Onapa", lastName: "Onapa" },
+                 { name: "Jimmy Patrick Alunyo", lastName: "Alunyo" },
+               ],
+             },
+           },
+         },
+       })}</script>`,
+      "https://www.researchsquare.com/article/rs-10663751/v1",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)?.authors).toEqual([
+      { name: "Mathias Ngobi Bogere", familyName: "Bogere" },
+      { name: "Maxwell Otim Onapa", familyName: "Onapa" },
+      { name: "Jimmy Patrick Alunyo", familyName: "Alunyo" },
+    ]);
+  });
+
+  it("extracts PubMed authors from the rendered citation record", () => {
+    const document = page(
+      `<meta name="citation_title" content="Parental son preference in childhood and cardiovascular disease">
+       <meta name="citation_date" content="08/14/2028">
+       <meta name="citation_pmid" content="42680123">
+       <a class="full-name" href="/?term=Lyu+J&amp;cauthor_id=42680123">Jingfei Lyu</a>
+       <a class="full-name" href="/?term=Xiao+M&amp;cauthor_id=42680123">Meng Xiao</a>
+       <a class="full-name" href="/?term=He+B&amp;cauthor_id=42680123">Biaochuan He</a>
+       <div class="short-view">
+         <a class="full-name" href="/?term=Lyu+J&amp;cauthor_id=42680123">Jingfei Lyu</a>
+       </div>`,
+      "https://pubmed.ncbi.nlm.nih.gov/42680123/",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)?.authors).toEqual([
+      { name: "Jingfei Lyu", familyName: "Lyu" },
+      { name: "Meng Xiao", familyName: "Xiao" },
+      { name: "Biaochuan He", familyName: "He" },
+    ]);
+  });
+
+  it("extracts IEEE metadata from its xplGlobal document payload", () => {
+    const document = page(
+      `<script>
+        var xplGlobal = { document: {} };
+        xplGlobal.document.metadata={"authors":[{"name":"Wei Pi","firstName":"Wei","lastName":"Pi"},{"name":"Zhouxun Li","firstName":"Zhouxun","lastName":"Li"}],"publicationYear":"2026","pdfPath":"/iel8/77/11663570/11655458.pdf","formulaStrippedArticleTitle":"Analysis on Thermal Stability of Self-Shielding High Temperature Superconducting DC Cable for Power Transmission","doi":"10.1109/TASC.2026.3723805"};
+      </script>`,
+      "https://ieeexplore.ieee.org/document/11655458",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).toMatchObject({
+      title:
+        "Analysis on Thermal Stability of Self-Shielding High Temperature Superconducting DC Cable for Power Transmission",
+      authors: [
+        { name: "Wei Pi", familyName: "Pi" },
+        { name: "Zhouxun Li", familyName: "Li" },
+      ],
+      year: "2026",
+      identifiers: { doi: "10.1109/tasc.2026.3723805" },
+      pdfUrls: ["https://ieeexplore.ieee.org/iel8/77/11663570/11655458.pdf"],
+      sourceAdapter: "ieee",
+    });
+  });
+
+  it("uses ACM's rendered family names when dc.Creator concatenates family and given names", () => {
+    const document = page(
+      `<meta name="dc.Title" content="Paying Attention to Vehicles">
+       <meta name="dc.Creator" content="QianYan ">
+       <meta name="dc.Creator" content="BarthelemyJohan ">
+       <meta name="dc.Creator" content="DuBo ">
+       <meta name="dc.Creator" content="ShenJun ">
+       <meta name="citation_date" content="2026">
+       <a href="#" role="button" data-db-target-for="axel_author_artseq-001"><span property="givenName">Yan</span> <span property="familyName">Qian</span></a>
+       <a href="#" role="button" data-db-target-for="axel_author_artseq-002"><span property="givenName">Johan</span> <span property="familyName">Barthelemy</span></a>
+       <a href="#" role="button" data-db-target-for="axel_author_artseq-003"><span property="givenName">Bo</span> <span property="familyName">Du</span></a>
+       <a href="#" role="button" data-db-target-for="axel_author_artseq-004"><span property="givenName">Jun</span> <span property="familyName">Shen</span></a>`,
+      "https://dl.acm.org/doi/10.1145/3655623",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)?.authors).toEqual([
+      { name: "Yan Qian", familyName: "Qian" },
+      { name: "Johan Barthelemy", familyName: "Barthelemy" },
+      { name: "Bo Du", familyName: "Du" },
+      { name: "Jun Shen", familyName: "Shen" },
+    ]);
+  });
+
+  it("does not trust an IEEE-shaped script on another site", () => {
+    const document = page(
+      `<script>xplGlobal.document.metadata={"formulaStrippedArticleTitle":"Imposter paper","authors":[{"name":"Mallory Example"}],"publicationYear":"2026","pdfPath":"/imposter.pdf"};</script>`,
+      "https://example.com/article",
+    );
+
+    expect(extractPaperMetadata(document, document.URL)).toBeUndefined();
   });
 
   it("extracts an EPrints repository record with repeated Dublin Core identifiers", () => {

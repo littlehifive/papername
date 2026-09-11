@@ -1,4 +1,4 @@
-import { contextSupportsCurrentPage, type Preset } from "@papername/core";
+import { findMatchingPageContext, type Preset } from "@papername/core";
 import { browser } from "wxt/browser";
 
 import { activateInvite, sendTelemetry } from "../../src/backend";
@@ -72,6 +72,7 @@ let currentSiteAccess: SiteAccess = {
   directPdf: false,
 };
 let latestFilename: string | undefined;
+let siteRenderVersion = 0;
 
 type SiteState = "checking" | "ready" | "warning" | "blocked" | "unavailable";
 
@@ -106,6 +107,7 @@ function setSiteButtonBusy(busy: boolean): void {
 }
 
 async function renderSiteAccess(isEnabled = true): Promise<void> {
+  const version = ++siteRenderVersion;
   const [[activeTab], contexts] = await Promise.all([
     browser.tabs.query({
       active: true,
@@ -113,6 +115,7 @@ async function renderSiteAccess(isEnabled = true): Promise<void> {
     }),
     getContexts(),
   ]);
+  if (version !== siteRenderVersion) return;
   currentTab =
     activeTab?.id !== undefined && activeTab.url
       ? { id: activeTab.id, url: activeTab.url }
@@ -148,8 +151,7 @@ async function renderSiteAccess(isEnabled = true): Promise<void> {
     ? { tabId: currentTab.id, url: currentTab.url }
     : undefined;
   const paperDetailsFound = Boolean(
-    activePage &&
-    contexts.some((context) => contextSupportsCurrentPage(context, activePage)),
+    activePage && findMatchingPageContext(contexts, activePage),
   );
   if (paperDetailsFound) {
     setSiteStatus(
@@ -377,3 +379,13 @@ privacy.addEventListener("click", (event) => {
 });
 
 void render();
+// Article metadata can arrive after this popup opens, especially on SPA readers.
+browser.storage.onChanged.addListener((changes, area) => {
+  if (
+    area === "session" &&
+    Object.keys(changes).some((key) => key.startsWith("articleContext:"))
+  ) {
+    void getSettings().then((settings) => renderSiteAccess(settings.enabled));
+  }
+});
+void refreshActiveContext();
