@@ -18,6 +18,8 @@ import {
 const enabled = document.querySelector<HTMLInputElement>("#enabled")!;
 const preset = document.querySelector<HTMLSelectElement>("#preset")!;
 const telemetry = document.querySelector<HTMLInputElement>("#telemetry")!;
+const enabledState = document.querySelector<HTMLElement>("#enabled-state")!;
+const telemetryState = document.querySelector<HTMLElement>("#telemetry-state")!;
 const activation = document.querySelector<HTMLDetailsElement>("#activation")!;
 const invite = document.querySelector<HTMLInputElement>("#invite")!;
 const activate = document.querySelector<HTMLButtonElement>("#activate")!;
@@ -49,11 +51,11 @@ const copyLabel = copyLastOutcome.querySelector<HTMLElement>(".copy-label")!;
 const FORMAT_PREVIEWS: Record<Preset, { pattern: string; example: string }> = {
   citation: {
     pattern: "[Authors] ([Year])",
-    example: "Cerna-Turoff et al. (2021).pdf",
+    example: "Wu et al. (2021).pdf",
   },
   citation_title: {
     pattern: "[Authors] ([Year]) — [Title]",
-    example: "Cerna-Turoff et al. (2021) — Violence against children.pdf",
+    example: "Wu et al. (2021) — Violence against children.pdf",
   },
   title: {
     pattern: "[Title]",
@@ -61,8 +63,7 @@ const FORMAT_PREVIEWS: Record<Preset, { pattern: string; example: string }> = {
   },
   citation_gist: {
     pattern: "[Authors] ([Year]) — [Key takeaway]",
-    example:
-      "Cerna-Turoff et al. (2021) — Childhood violence shapes later health.pdf",
+    example: "Wu et al. (2021) — Childhood violence shapes later health.pdf",
   },
 };
 
@@ -100,6 +101,10 @@ function renderFormatPreview(nextPreset: Preset): void {
   const preview = FORMAT_PREVIEWS[nextPreset];
   formatPattern.textContent = preview.pattern;
   formatExample.textContent = preview.example;
+}
+
+function renderToggleState(input: HTMLInputElement, state: HTMLElement): void {
+  state.textContent = input.checked ? "On" : "Off";
 }
 
 function setSiteButtonBusy(busy: boolean): void {
@@ -210,9 +215,11 @@ async function refreshActiveContext(): Promise<void> {
 async function render(): Promise<void> {
   const settings = await getSettings();
   enabled.checked = settings.enabled;
+  renderToggleState(enabled, enabledState);
   preset.value = settings.preset;
   renderFormatPreview(settings.preset);
   telemetry.checked = settings.telemetryEnabled;
+  renderToggleState(telemetry, telemetryState);
   activation.hidden = Boolean(settings.betaToken);
   activation.open = !settings.betaToken && settings.preset === "citation_gist";
   quota.hidden = !settings.betaToken;
@@ -271,13 +278,14 @@ scanSite.addEventListener("click", async () => {
 });
 
 enabled.addEventListener("change", async () => {
+  renderToggleState(enabled, enabledState);
   await updateSettings({ enabled: enabled.checked });
   await renderSiteAccess(enabled.checked);
 });
-telemetry.addEventListener(
-  "change",
-  () => void updateSettings({ telemetryEnabled: telemetry.checked }),
-);
+telemetry.addEventListener("change", () => {
+  renderToggleState(telemetry, telemetryState);
+  void updateSettings({ telemetryEnabled: telemetry.checked });
+});
 
 preset.addEventListener("change", async () => {
   const nextPreset = preset.value as Preset;

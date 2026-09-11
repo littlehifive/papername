@@ -11,16 +11,30 @@
       <header>
         <div>
           <h1>Papername</h1>
-          <p>Give every academic PDF a name that makes sense.</p>
+          <p>
+            Turn filenames like <code>1c96203b55c6.pdf</code> into
+            <code>Wu et al. (2026).pdf</code>.
+          </p>
         </div>
-        <label class="switch"
-          ><input id="enabled" type="checkbox" /><span>On</span></label
-        >
+        <label class="toggle">
+          <input
+            id="enabled"
+            type="checkbox"
+            role="switch"
+            aria-label="Rename downloaded PDFs"
+          />
+          <span class="toggle-track" aria-hidden="true">
+            <span class="toggle-thumb"></span>
+          </span>
+          <span id="enabled-state" class="toggle-state" aria-hidden="true"
+            >On</span
+          >
+        </label>
       </header>
 
       <section
         id="site-access"
-        class="status site-status"
+        class="card primary-card status site-status"
         data-state="checking"
       >
         <div class="status-heading">
@@ -36,7 +50,7 @@
         </div>
       </section>
 
-      <section id="naming-style">
+      <section id="naming-style" class="card primary-card naming-style">
         <label for="preset">How should PDFs be named?</label>
         <select id="preset">
           <option value="citation">Authors &amp; year</option>
@@ -53,7 +67,7 @@
           </div>
           <div class="format-preview-row format-example-row">
             <span>Example</span>
-            <strong id="format-example">Cerna-Turoff et al. (2021).pdf</strong>
+            <strong id="format-example">Wu et al. (2021).pdf</strong>
           </div>
         </div>
       </section>
@@ -88,7 +102,7 @@
         <strong id="remaining">—</strong>
       </section>
 
-      <section class="status latest-result">
+      <section class="card status latest-result">
         <div class="status-heading">
           <span>Latest result</span>
           <button
@@ -105,15 +119,28 @@
         <p id="last-outcome">No eligible PDF handled yet.</p>
       </section>
 
-      <label class="telemetry" for="telemetry">
-        <input id="telemetry" type="checkbox" />
-        <span>
+      <label class="card telemetry" for="telemetry">
+        <span class="telemetry-copy">
           <strong>Share anonymous usage data</strong>
-          <small>
-            Help improve Papername by sharing whether renaming worked, why it
-            didn't, and how long it took. Paper titles, filenames, and websites
-            are never included.
+          <small id="telemetry-description">
+            When on, Papername sends feature choices, rename success, error
+            reason, timing, and app version after beta activation. Never paper
+            titles, abstracts, filenames, or websites. Turn it off any time.
           </small>
+        </span>
+        <span class="toggle">
+          <input
+            id="telemetry"
+            type="checkbox"
+            role="switch"
+            aria-describedby="telemetry-description"
+          />
+          <span class="toggle-track" aria-hidden="true">
+            <span class="toggle-thumb"></span>
+          </span>
+          <span id="telemetry-state" class="toggle-state" aria-hidden="true"
+            >On</span
+          >
         </span>
       </label>
 

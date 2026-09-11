@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enabled: true,
   preset: "citation",
   gistConsent: false,
-  telemetryEnabled: false,
+  telemetryEnabled: true,
 };
 
 export interface LastOutcome extends DownloadDecision {

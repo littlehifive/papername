@@ -251,7 +251,7 @@ test("publishes article metadata and registers the browser filename hook", async
     await popup.reload();
 
     await expect(popup.locator("header p")).toHaveText(
-      "Give every academic PDF a name that makes sense.",
+      "Turn filenames like 1c96203b55c6.pdf into Wu et al. (2026).pdf.",
     );
     await expect(popup.locator("#site-access-label")).toHaveText(
       "Ready to rename",
@@ -259,11 +259,13 @@ test("publishes article metadata and registers the browser filename hook", async
     await expect(popup.locator("#site-access-message")).toHaveText(
       "Paper details found on JSTOR. Papername is ready to name this paper's PDF.",
     );
-    await popup.locator("#enabled").uncheck();
+    await popup.locator("header .toggle").click();
+    await expect(popup.locator("#enabled")).not.toBeChecked();
+    await expect(popup.locator("#enabled-state")).toHaveText("Off");
     await expect(popup.locator("#site-access-label")).toHaveText(
       "Papername is off",
     );
-    await popup.locator("#enabled").check();
+    await popup.locator("header .toggle").click();
     await expect(popup.locator("#site-access-label")).toHaveText(
       "Ready to rename",
     );
@@ -279,9 +281,34 @@ test("publishes article metadata and registers the browser filename hook", async
       "[Authors] ([Year])",
     );
     await expect(popup.locator("#format-example")).toHaveText(
-      "Cerna-Turoff et al. (2021).pdf",
+      "Wu et al. (2021).pdf",
     );
     await expect(popup.locator("#enabled")).toBeChecked();
+    await expect(popup.locator("#enabled")).toHaveAttribute("role", "switch");
+    await expect(popup.locator("#enabled-state")).toHaveText("On");
+    await expect(popup.locator("header .toggle-track")).toHaveCSS(
+      "background-color",
+      "rgb(79, 70, 229)",
+    );
+    await expect(popup.locator("#telemetry")).toBeChecked();
+    await expect(popup.locator("#telemetry")).toHaveAttribute("role", "switch");
+    await expect(popup.locator("#telemetry-state")).toHaveText("On");
+    await expect(popup.locator(".telemetry .toggle-track")).toHaveCSS(
+      "background-color",
+      "rgb(79, 70, 229)",
+    );
+    await popup.locator(".telemetry").click();
+    await expect(popup.locator("#telemetry")).not.toBeChecked();
+    await expect(popup.locator("#telemetry-state")).toHaveText("Off");
+    await expect
+      .poll(() =>
+        worker.evaluate(
+          async () =>
+            (await chrome.storage.local.get("settings")).settings
+              ?.telemetryEnabled,
+        ),
+      )
+      .toBe(false);
     await expect(popup.locator("#site-actions")).toBeHidden();
     await expect(popup.locator("#last-outcome")).toHaveText(
       "Williams & Bargh (2008) — Warm hands, warm heart.pdf",
@@ -325,7 +352,7 @@ test("activates a beta invite and records explicit gist consent", async () => {
       "Share anonymous usage data",
     );
     await expect(popup.locator(".telemetry small")).toContainText(
-      "Paper titles, filenames, and websites are never included.",
+      "feature choices, rename success, error reason, timing, and app version",
     );
     await expect(popup.locator("#pro-interest")).toHaveText(
       "I'd buy you a coffee ☕",

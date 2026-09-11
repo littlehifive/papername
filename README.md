@@ -1,6 +1,6 @@
 # Papername
 
-Give every academic PDF a name that makes sense.
+Turn filenames like `1c96203b55c6.pdf` into `Wu et al. (2026).pdf`.
 
 Papername is a Chrome/Chromium extension that automatically renames academic PDF downloads using citation metadata, paper titles, or a concise AI-generated gist. The MVP consists of a Manifest V3 extension and a rate-limited Cloudflare Worker.
 

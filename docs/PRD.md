@@ -14,7 +14,7 @@ Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic
 
 The default is an APA-like citation label such as `Wu et al. (2026).pdf`. Alternatives add the full title, use the title alone, or combine the citation label with a short English gist. Citation and title naming run locally. Gist mode sends only the title and abstract to a rate-limited Cloudflare Worker, which calls a fast hosted language model and returns a strictly validated short phrase. The backend stores no paper content.
 
-The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; a small “I'd buy you a coffee” action records interest locally without implying that checkout or a paid tier already exists. Its aggregate count is shared only when the tester has separately opted into anonymous usage data and activated beta access.
+The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; a small “I'd buy you a coffee” action records interest locally without implying that checkout or a paid tier already exists. Its aggregate count is shared only when anonymous usage data is enabled and the tester has activated beta access.
 
 ## User Stories
 
@@ -46,7 +46,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 26. As a privacy-conscious researcher, I want the disclosure to state the provider's possible abuse-log retention, so that it is accurate rather than reassuringly vague.
 27. As a beta tester, I want one-use invite activation, so that setup is simple without creating an account.
 28. As a beta tester, I want feedback access from the popup, so that I can report a bad name or unsupported source.
-29. As a beta tester, I want telemetry to be optional, so that participation is voluntary.
+29. As a beta tester, I want telemetry to be clearly explained and easy to switch off, so that I control whether I participate.
 30. As a beta tester who opts in, I want Papername to send only coarse operational events, so that paper titles, abstracts, identifiers, URLs, and filenames stay private.
 31. As the product owner, I want monthly gist quotas enforced atomically, so that leaked or replayed credentials cannot create unbounded model spend.
 32. As the product owner, I want model credentials kept only in Worker secrets, so that they cannot be extracted from the extension.
@@ -88,9 +88,9 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Expose Worker endpoints `POST /v1/activate`, `POST /v1/gist`, and `POST /v1/events`. Successful activation returns a random bearer token. Gist responses return `usable`, `gist`, `reason`, and `remaining`.
 - Limit the beta to 30 gist requests per bearer token per UTC calendar month. Count concurrent calls atomically before invoking the model. Do not refund provider failures, preventing retry abuse.
 - Hash invite codes and bearer tokens in D1. Never persist titles, abstracts, identifiers, URLs, filenames, or generated gists. Application logs must omit request bodies.
-- Store opt-in telemetry only as aggregate counters keyed by day, extension version, preset, outcome, reason, and latency bucket; never store an installation identifier with telemetry.
+- Store enabled telemetry only as aggregate counters keyed by day, extension version, preset, outcome, reason, and latency bucket; never store an installation identifier with telemetry.
 - The popup exposes its current-page readiness before the filename-format selector, uses color and icons to distinguish ready, unavailable, and needs-attention states, and describes each format with replaceable-field notation plus a concrete example.
-- The popup also exposes enabled state, remaining key-takeaway quota, the latest generated filename with a copy action, privacy/feedback links, a plain-language telemetry choice, and an honest coffee-sized encouragement action. It does not maintain a paper library or download history.
+- The popup also exposes enabled state, remaining key-takeaway quota, the latest generated filename with a copy action, privacy/feedback links, a plain-language telemetry choice that defaults on and can be switched off at any time, and an honest coffee-sized encouragement action. It does not maintain a paper library or download history.
 - The private beta listing uses the product name `Papername BETA`, includes the required testing disclosure, and is restricted to trusted testers. Each tester receives a separate one-use API invite.
 - Custom metadata templates, custom key-takeaway instructions, pricing, payments, accounts, license enforcement, and the custom editor are deferred until after the beta.
 
