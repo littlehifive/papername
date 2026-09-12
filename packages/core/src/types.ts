@@ -3,9 +3,17 @@ export const PRESETS = [
   "citation_title",
   "title",
   "citation_gist",
+  "gist",
 ] as const;
 
 export type Preset = (typeof PRESETS)[number];
+
+/** Presets that need a hosted key takeaway. */
+export const TAKEAWAY_PRESETS: readonly Preset[] = ["citation_gist", "gist"];
+
+export function usesTakeaway(preset: Preset): boolean {
+  return TAKEAWAY_PRESETS.includes(preset);
+}
 
 export interface PaperAuthor {
   name: string;
@@ -51,6 +59,8 @@ export interface ArticleContext {
   pageUrl: string;
   capturedAt: number;
   tabId: number;
+  /** A validated key takeaway already generated for this paper in this tab. */
+  takeaway?: string;
 }
 
 export interface DownloadCandidate {

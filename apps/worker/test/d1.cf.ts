@@ -15,65 +15,135 @@ declare global {
 describe("D1 persistence boundary", () => {
   beforeEach(async () => {
     await env.DB.batch([
-      env.DB.prepare("DELETE FROM monthly_usage"),
+      env.DB.prepare("DELETE FROM access_keys"),
       env.DB.prepare("DELETE FROM telemetry_counters"),
-      env.DB.prepare("DELETE FROM invite_codes"),
+      env.DB.prepare("DELETE FROM installs"),
     ]);
   });
 
-  it("activates an invite exactly once using the migrated schema", async () => {
-    const codeHash = await hashSecret("BETA-D1");
-    await env.DB.prepare("INSERT INTO invite_codes (code_hash) VALUES (?)")
-      .bind(codeHash)
-      .run();
+  it("spends at most the available credits under concurrency", async () => {
     const repository = new D1PapernameRepository(env.DB);
-
-    await expect(
-      repository.activate(codeHash, "token-hash", "2026-09-04T12:00:00Z"),
-    ).resolves.toBe(true);
-    await expect(
-      repository.activate(codeHash, "other-token", "2026-09-04T12:01:00Z"),
-    ).resolves.toBe(false);
-    await expect(repository.hasToken("token-hash")).resolves.toBe(true);
-  });
-
-  it("atomically permits only one concurrent call at a limit of one", async () => {
-    const codeHash = await hashSecret("BETA-QUOTA");
-    await env.DB.prepare(
-      "INSERT INTO invite_codes (code_hash, token_hash) VALUES (?, ?)",
-    )
-      .bind(codeHash, "quota-token")
-      .run();
-    const repository = new D1PapernameRepository(env.DB);
+    await repository.register("spend-token", 1, "2026-09-04T12:00:00Z");
 
     const results = await Promise.all([
-      repository.consume("quota-token", "2026-09", 1),
-      repository.consume("quota-token", "2026-09", 1),
+      repository.consume("spend-token"),
+      repository.consume("spend-token"),
     ]);
     expect(results.sort()).toEqual([0, undefined]);
-    const row = await env.DB.prepare(
-      "SELECT count FROM monthly_usage WHERE token_hash = ? AND month = ?",
-    )
-      .bind("quota-token", "2026-09")
-      .first<{ count: number }>();
-    expect(row?.count).toBe(1);
+    await expect(repository.refund("spend-token")).resolves.toBe(1);
   });
 
-  it("activates and rejects invite replay through the exported Worker endpoint", async () => {
-    const codeHash = await hashSecret("BETA-RUNTIME");
-    await env.DB.prepare("INSERT INTO invite_codes (code_hash) VALUES (?)")
-      .bind(codeHash)
+  it("redeems a gift key exactly once, even when replayed concurrently", async () => {
+    const repository = new D1PapernameRepository(env.DB);
+    await repository.register("gift-token", 10, "2026-09-04T12:00:00Z");
+    await repository.register("other-token", 10, "2026-09-04T12:00:00Z");
+    const keyHash = await hashSecret("GIFT-D1");
+    await env.DB.prepare(
+      "INSERT INTO access_keys (key_hash, kind, credits) VALUES (?, 'gift', 300)",
+    )
+      .bind(keyHash)
       .run();
-    const request = () =>
-      SELF.fetch("https://papername.test/v1/activate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: "beta-runtime" }),
-      });
 
-    const activated = await request();
-    expect(activated.status).toBe(200);
-    expect(await activated.json()).toMatchObject({ remaining: 30 });
-    expect((await request()).status).toBe(409);
+    const results = await Promise.all([
+      repository.redeemGiftKey(
+        keyHash,
+        "gift-token",
+        "2026-09-04T12:00:00Z",
+        "claim-a",
+      ),
+      repository.redeemGiftKey(
+        keyHash,
+        "other-token",
+        "2026-09-04T12:00:00Z",
+        "claim-b",
+      ),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "redeemed",
+      "used",
+    ]);
+    const balances = await env.DB.prepare(
+      "SELECT token_hash, credits FROM installs ORDER BY token_hash",
+    ).all<{ token_hash: string; credits: number }>();
+    expect(
+      balances.results.map((row) => row.credits).sort((a, b) => a - b),
+    ).toEqual([10, 310]);
+
+    await expect(
+      repository.redeemGiftKey(
+        keyHash,
+        "gift-token",
+        "2026-09-04T12:01:00Z",
+        "claim-c",
+      ),
+    ).resolves.toEqual({ status: "used" });
+    await expect(
+      repository.redeemGiftKey(
+        await hashSecret("GIFT-NOPE"),
+        "gift-token",
+        "2026-09-04T12:01:00Z",
+        "claim-d",
+      ),
+    ).resolves.toEqual({ status: "unknown" });
+  });
+
+  it("records a purchase key once and rejects its replay", async () => {
+    const repository = new D1PapernameRepository(env.DB);
+    await repository.register("buyer-token", 0, "2026-09-04T12:00:00Z");
+    const keyHash = await hashSecret("PN-PAID");
+
+    await expect(
+      repository.recordPurchase(
+        keyHash,
+        1500,
+        "buyer-token",
+        "2026-09-04T12:00:00Z",
+        "claim-1",
+      ),
+    ).resolves.toEqual({ status: "redeemed", credits: 1500, added: 1500 });
+    await expect(
+      repository.recordPurchase(
+        keyHash,
+        1500,
+        "buyer-token",
+        "2026-09-04T12:05:00Z",
+        "claim-2",
+      ),
+    ).resolves.toEqual({ status: "used" });
+    await expect(repository.consume("buyer-token")).resolves.toBe(1499);
+  });
+
+  it("registers and redeems through the exported Worker endpoint", async () => {
+    const registered = await SELF.fetch("https://papername.test/v1/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(registered.status).toBe(200);
+    const { token } = (await registered.json()) as {
+      token: string;
+      remaining: number;
+    };
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+
+    const keyHash = await hashSecret("GIFT-RUNTIME");
+    await env.DB.prepare(
+      "INSERT INTO access_keys (key_hash, kind, credits) VALUES (?, 'gift', 300)",
+    )
+      .bind(keyHash)
+      .run();
+    const redeem = () =>
+      SELF.fetch("https://papername.test/v1/redeem", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ key: "gift-runtime" }),
+      });
+    const redeemed = await redeem();
+    expect(redeemed.status).toBe(200);
+    expect(await redeemed.json()).toEqual({ remaining: 310, added: 300 });
+    expect((await redeem()).status).toBe(409);
   });
 });

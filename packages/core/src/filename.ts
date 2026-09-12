@@ -123,6 +123,18 @@ export function buildFilename({
     );
   }
 
+  if (preset === "gist") {
+    if (gist) return resultForBasename(gist, "renamed", "selected_preset");
+    if (title)
+      return resultForBasename(
+        title,
+        "fallback",
+        gistFailure ??
+          (metadata.abstract ? "gist_unavailable" : "missing_abstract"),
+      );
+    return resultForBasename(citation, "fallback", "missing_metadata");
+  }
+
   if (gist && citation)
     return resultForBasename(
       `${citation} — ${gist}`,

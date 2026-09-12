@@ -1,16 +1,16 @@
-CREATE TABLE invite_codes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code_hash TEXT NOT NULL UNIQUE,
-  token_hash TEXT UNIQUE,
-  activated_at TEXT
+CREATE TABLE installs (
+  token_hash TEXT PRIMARY KEY,
+  credits INTEGER NOT NULL CHECK (credits >= 0),
+  created_at TEXT NOT NULL
 );
 
-CREATE TABLE monthly_usage (
-  token_hash TEXT NOT NULL,
-  month TEXT NOT NULL,
-  count INTEGER NOT NULL CHECK (count >= 0),
-  PRIMARY KEY (token_hash, month),
-  FOREIGN KEY (token_hash) REFERENCES invite_codes(token_hash)
+CREATE TABLE access_keys (
+  key_hash TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('gift', 'purchase')),
+  credits INTEGER NOT NULL CHECK (credits > 0),
+  redeemed_by TEXT REFERENCES installs(token_hash),
+  redeemed_at TEXT,
+  claim_id TEXT UNIQUE
 );
 
 CREATE TABLE telemetry_counters (

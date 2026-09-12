@@ -45,6 +45,11 @@ describe("download filename", () => {
       "Warm objects increase perceived interpersonal warmth",
       "Williams et al. (2008) — Warm objects increase perceived interpersonal warmth.pdf",
     ],
+    [
+      "gist",
+      "Warm objects increase perceived interpersonal warmth",
+      "Warm objects increase perceived interpersonal warmth.pdf",
+    ],
   ] as const)("renders the %s preset", (preset, gist, expected) => {
     expect(buildFilename({ metadata: paper, preset, gist }).filename).toBe(
       expected,
@@ -94,6 +99,34 @@ describe("download filename", () => {
         "Williams et al. (2008) — Holding warm coffee increases perceived interpersonal warmth.pdf",
       outcome: "fallback",
       reason: "missing_abstract",
+    });
+  });
+
+  it("falls back from takeaway-only to the title, then to the citation", () => {
+    expect(
+      buildFilename({
+        metadata: paper,
+        preset: "gist",
+        gistFailure: "gist_timeout",
+      }),
+    ).toEqual({
+      filename:
+        "Holding warm coffee increases perceived interpersonal warmth.pdf",
+      outcome: "fallback",
+      reason: "gist_timeout",
+    });
+    expect(
+      buildFilename({
+        metadata: { ...paper, abstract: undefined },
+        preset: "gist",
+      }),
+    ).toMatchObject({ outcome: "fallback", reason: "missing_abstract" });
+    expect(
+      buildFilename({ metadata: { ...paper, title: "" }, preset: "gist" }),
+    ).toEqual({
+      filename: "Williams et al. (2008).pdf",
+      outcome: "fallback",
+      reason: "missing_metadata",
     });
   });
 
