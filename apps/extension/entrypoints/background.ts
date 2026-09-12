@@ -3,12 +3,14 @@ import type {
   DownloadCandidate,
   PaperMetadata,
 } from "@papername/core";
-import { isLikelyPdfDownload } from "@papername/core";
+import { isLikelyPdfDownload, usesTakeaway } from "@papername/core";
 
+import { ensureApiToken } from "../src/account";
 import { latencyBucket, requestGist, sendTelemetry } from "../src/backend";
 import { mergePaperMetadata } from "../src/context";
-import { decideDownload } from "../src/decision";
+import { decideDownload, type DownloadDecision } from "../src/decision";
 import { enrichMetadata } from "../src/enrichment";
+import { isPdfPressMessage } from "../src/pdf-press";
 import {
   getContexts,
   getSettings,
@@ -17,6 +19,8 @@ import {
   saveLastOutcome,
   updateSettings,
 } from "../src/storage";
+import { pendingTakeaway, startTakeaway } from "../src/takeaway";
+import type { ToastPayload } from "../src/toast";
 import { attachTrustedViewerUrl, isAdobeAcrobatDownload } from "../src/viewer";
 
 interface ContextMessage {
@@ -37,29 +41,95 @@ function isContextMessage(message: unknown): message is ContextMessage {
   );
 }
 
+async function contextFor(
+  tabId: number,
+  pageUrl: string,
+): Promise<ArticleContext | undefined> {
+  return (await getContexts()).find(
+    (item) => item.tabId === tabId && item.pageUrl === pageUrl,
+  );
+}
+
+/** The press can arrive before the context message finished saving. */
+async function awaitContext(
+  tabId: number,
+  pageUrl: string,
+): Promise<ArticleContext | undefined> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const context = await contextFor(tabId, pageUrl);
+    if (context) return context;
+    await new Promise((resolve) => setTimeout(resolve, 75));
+  }
+  return undefined;
+}
+
+async function rememberTakeaway(
+  context: ArticleContext,
+  takeaway: string,
+): Promise<void> {
+  const current = await contextFor(context.tabId, context.pageUrl);
+  if (current && !current.takeaway) await saveContext({ ...current, takeaway });
+}
+
+function sendToast(tabId: number, payload: ToastPayload): void {
+  void chrome.tabs.sendMessage(tabId, payload).catch(() => undefined);
+}
+
 async function decideAndRecord(
   download: DownloadCandidate,
   contexts: ArticleContext[],
-) {
+): Promise<DownloadDecision> {
   const startedAt = performance.now();
   const settings = await getSettings();
   const decision = await decideDownload({
     contexts,
     download,
     settings,
-    requestGist: settings.betaToken
-      ? (metadata, signal) => requestGist(metadata, settings.betaToken!, signal)
+    requestGist: settings.apiToken
+      ? (metadata, signal) => requestGist(metadata, settings.apiToken!, signal)
       : undefined,
+    pendingGist: pendingTakeaway,
   });
   if (typeof decision.remaining === "number")
     await updateSettings({ remaining: decision.remaining });
   if (decision.reason !== "disabled") {
-    await saveLastOutcome({
-      ...decision,
-      at: new Date().toISOString(),
-    });
-    if (settings.telemetryEnabled && settings.betaToken) {
-      void sendTelemetry(settings.betaToken, {
+    const { tabId, pageUrl, takeaway, ...outcome } = decision;
+    await saveLastOutcome({ ...outcome, at: new Date().toISOString() });
+    if (takeaway && tabId !== undefined && pageUrl) {
+      const context = contexts.find(
+        (item) => item.tabId === tabId && item.pageUrl === pageUrl,
+      );
+      if (context) await rememberTakeaway(context, takeaway);
+    }
+    if (
+      tabId !== undefined &&
+      settings.toastEnabled &&
+      usesTakeaway(settings.preset) &&
+      decision.reason !== "unmatched_download"
+    ) {
+      sendToast(
+        tabId,
+        decision.outcome === "renamed" && decision.suggestion
+          ? {
+              type: "papername:toast",
+              state: "named",
+              filename: decision.suggestion,
+              ...(typeof decision.remaining === "number"
+                ? { remaining: decision.remaining }
+                : {}),
+            }
+          : {
+              type: "papername:toast",
+              state: "fallback",
+              reason: decision.reason,
+              ...(typeof decision.remaining === "number"
+                ? { remaining: decision.remaining }
+                : {}),
+            },
+      );
+    }
+    if (settings.telemetryEnabled && settings.apiToken) {
+      void sendTelemetry(settings.apiToken, {
         event: "rename_result",
         preset: settings.preset,
         outcome: decision.outcome,
@@ -71,28 +141,54 @@ async function decideAndRecord(
   return decision;
 }
 
+async function handlePdfPress(tabId: number, pageUrl: string): Promise<void> {
+  const settings = await getSettings();
+  if (
+    !settings.enabled ||
+    !usesTakeaway(settings.preset) ||
+    !settings.gistConsent
+  )
+    return;
+  const context = await awaitContext(tabId, pageUrl);
+  if (!context || context.takeaway || pendingTakeaway(context)) return;
+  if (!context.metadata.abstract) return;
+  if (
+    settings.preset === "citation_gist" &&
+    !context.metadata.authors.some((author) => author.name.trim())
+  )
+    return;
+  const token = await ensureApiToken();
+  if (!token) return;
+  startTakeaway({
+    context,
+    request: (metadata, signal) => requestGist(metadata, token, signal),
+    remember: rememberTakeaway,
+  });
+  if (settings.toastEnabled)
+    sendToast(tabId, { type: "papername:toast", state: "preparing" });
+}
+
 export default defineBackground(() => {
   chrome.runtime.onMessage.addListener((message: unknown, sender) => {
     if (sender.tab?.id === undefined) return;
-    if (!isContextMessage(message)) return;
     const tabId = sender.tab.id;
+    if (isPdfPressMessage(message)) {
+      void handlePdfPress(tabId, message.pageUrl).catch(() => undefined);
+      return;
+    }
+    if (!isContextMessage(message)) return;
     void (async () => {
-      const prior = (await getContexts()).find(
-        (item) => item.tabId === tabId && item.pageUrl === message.pageUrl,
-      );
+      const prior = await contextFor(tabId, message.pageUrl);
       const context: ArticleContext = {
         metadata: mergePaperMetadata(message.metadata, prior?.metadata),
         pageUrl: message.pageUrl,
         capturedAt: Date.now(),
         tabId,
+        ...(prior?.takeaway ? { takeaway: prior.takeaway } : {}),
       };
       await saveContext(context);
       const settings = await getSettings();
-      if (
-        settings.preset === "citation_gist" &&
-        settings.gistConsent &&
-        settings.betaToken
-      ) {
+      if (usesTakeaway(settings.preset) && settings.gistConsent) {
         const metadata = await enrichMetadata(context.metadata);
         const current = (await getContexts()).find(
           (item) => item.tabId === tabId,

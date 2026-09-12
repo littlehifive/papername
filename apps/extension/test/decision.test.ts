@@ -41,6 +41,13 @@ const settings: ExtensionSettings = {
   preset: "citation",
   gistConsent: false,
   telemetryEnabled: false,
+  toastEnabled: true,
+};
+const takeawaySettings: ExtensionSettings = {
+  ...settings,
+  preset: "citation_gist",
+  gistConsent: true,
+  apiToken: "token",
 };
 
 describe("download decision", () => {
@@ -383,7 +390,7 @@ describe("download decision", () => {
           ...settings,
           preset: "citation_gist",
           gistConsent: true,
-          betaToken: "token",
+          apiToken: "token",
         },
         requestGist: async () => ({
           usable: true,
@@ -410,7 +417,7 @@ describe("download decision", () => {
         ...settings,
         preset: "citation_gist",
         gistConsent: true,
-        betaToken: "token",
+        apiToken: "token",
       },
       requestGist: async () => ({
         usable: true,
@@ -444,7 +451,7 @@ describe("download decision", () => {
         ...settings,
         preset: "citation_gist",
         gistConsent: true,
-        betaToken: "token",
+        apiToken: "token",
       },
       requestGist: async () => ({
         usable: true,
@@ -471,7 +478,7 @@ describe("download decision", () => {
           ...settings,
           preset: "citation_gist",
           gistConsent: true,
-          betaToken: "token",
+          apiToken: "token",
         },
         requestGist: () => new Promise(() => undefined),
         timeoutMs: 5,
@@ -484,7 +491,7 @@ describe("download decision", () => {
     });
   });
 
-  it("does not call hosted AI without consent or a beta token", async () => {
+  it("does not call hosted AI without consent or an API token", async () => {
     let calls = 0;
     const result = await decideDownload({
       contexts: [context],
@@ -503,7 +510,7 @@ describe("download decision", () => {
     });
   });
 
-  it("does not spend gist quota when no author can appear in the selected format", async () => {
+  it("does not spend a credit when no author can appear in the selected format", async () => {
     let calls = 0;
     const result = await decideDownload({
       contexts: [{ ...context, metadata: { ...metadata, authors: [] } }],
@@ -512,7 +519,7 @@ describe("download decision", () => {
         ...settings,
         preset: "citation_gist",
         gistConsent: true,
-        betaToken: "token",
+        apiToken: "token",
       },
       requestGist: async () => {
         calls += 1;
@@ -529,7 +536,7 @@ describe("download decision", () => {
     });
   });
 
-  it("surfaces a zero remaining allowance when quota is exhausted", async () => {
+  it("surfaces a zero balance when the credits are exhausted", async () => {
     const result = await decideDownload({
       contexts: [context],
       download,
@@ -537,7 +544,7 @@ describe("download decision", () => {
         ...settings,
         preset: "citation_gist",
         gistConsent: true,
-        betaToken: "token",
+        apiToken: "token",
       },
       requestGist: async () =>
         Promise.reject(
@@ -553,6 +560,168 @@ describe("download decision", () => {
       outcome: "fallback",
       reason: "quota_exhausted",
       remaining: 0,
+    });
+  });
+
+  it("reuses a press-started request and returns the context identity", async () => {
+    let calls = 0;
+    const result = await decideDownload({
+      contexts: [context],
+      download,
+      settings: takeawaySettings,
+      requestGist: async () => {
+        calls += 1;
+        throw new Error("the hook must not start a second request");
+      },
+      pendingGist: (matched) =>
+        matched.tabId === 4
+          ? {
+              startedAt: now - 800,
+              promise: Promise.resolve({
+                usable: true,
+                gist: "Warm objects increase perceived interpersonal warmth",
+                reason: "ok",
+                remaining: 9,
+              }),
+            }
+          : undefined,
+      now: () => now,
+    });
+
+    expect(calls).toBe(0);
+    expect(result).toEqual({
+      suggestion:
+        "Williams et al. (2008) — Warm objects increase perceived interpersonal warmth.pdf",
+      outcome: "renamed",
+      reason: "selected_preset",
+      remaining: 9,
+      tabId: 4,
+      pageUrl: context.pageUrl,
+      takeaway: "Warm objects increase perceived interpersonal warmth",
+    });
+  });
+
+  it("waits only the remainder of the press window for a pending request", async () => {
+    const started = Date.now();
+    const result = await decideDownload({
+      contexts: [context],
+      download,
+      settings: takeawaySettings,
+      requestGist: async () => {
+        throw new Error("must not run");
+      },
+      pendingGist: () => ({
+        startedAt: now - 2_450,
+        promise: new Promise(() => undefined),
+      }),
+      now: () => now,
+    });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(result).toMatchObject({
+      suggestion: "Williams et al. (2008) — Warm hands, warm heart.pdf",
+      outcome: "fallback",
+      reason: "gist_timeout",
+    });
+  });
+
+  it("uses a takeaway cached on the context without spending a credit", async () => {
+    let calls = 0;
+    const result = await decideDownload({
+      contexts: [
+        {
+          ...context,
+          takeaway: "Warm objects increase perceived interpersonal warmth",
+        },
+      ],
+      download,
+      settings: { ...takeawaySettings, remaining: 7 },
+      requestGist: async () => {
+        calls += 1;
+        throw new Error("must not run");
+      },
+      now: () => now,
+    });
+    expect(calls).toBe(0);
+    expect(result).toMatchObject({
+      suggestion:
+        "Williams et al. (2008) — Warm objects increase perceived interpersonal warmth.pdf",
+      outcome: "renamed",
+      remaining: 7,
+    });
+  });
+
+  it("names with the takeaway-only preset and falls back to the title", async () => {
+    await expect(
+      decideDownload({
+        contexts: [context],
+        download,
+        settings: { ...takeawaySettings, preset: "gist" },
+        requestGist: async () => ({
+          usable: true,
+          gist: "Warm objects increase perceived interpersonal warmth",
+          reason: "ok",
+          remaining: 9,
+        }),
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({
+      suggestion: "Warm objects increase perceived interpersonal warmth.pdf",
+      outcome: "renamed",
+    });
+    await expect(
+      decideDownload({
+        contexts: [context],
+        download,
+        settings: { ...takeawaySettings, preset: "gist" },
+        requestGist: () => new Promise(() => undefined),
+        timeoutMs: 5,
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({
+      suggestion: "Warm hands, warm heart.pdf",
+      outcome: "fallback",
+      reason: "gist_timeout",
+    });
+  });
+
+  it("does not require an author for the takeaway-only preset", async () => {
+    await expect(
+      decideDownload({
+        contexts: [{ ...context, metadata: { ...metadata, authors: [] } }],
+        download,
+        settings: { ...takeawaySettings, preset: "gist" },
+        requestGist: async () => ({
+          usable: true,
+          gist: "Warm objects increase perceived interpersonal warmth",
+          reason: "ok",
+          remaining: 9,
+        }),
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({
+      suggestion: "Warm objects increase perceived interpersonal warmth.pdf",
+      outcome: "renamed",
+    });
+  });
+
+  it("accepts a five-word claim now that the floor is four words", async () => {
+    await expect(
+      decideDownload({
+        contexts: [context],
+        download,
+        settings: takeawaySettings,
+        requestGist: async () => ({
+          usable: true,
+          gist: "Warm objects raise perceived warmth",
+          reason: "ok",
+          remaining: 9,
+        }),
+        now: () => now,
+      }),
+    ).resolves.toMatchObject({
+      suggestion:
+        "Williams et al. (2008) — Warm objects raise perceived warmth.pdf",
+      outcome: "renamed",
     });
   });
 });

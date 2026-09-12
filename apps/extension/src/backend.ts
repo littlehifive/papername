@@ -27,13 +27,15 @@ async function responseBody(
   }
 }
 
-export async function activateInvite(
-  code: string,
-): Promise<{ token: string; remaining: number }> {
-  const response = await fetch(`${API_BASE}/v1/activate`, {
+/** Creates an anonymous install with its free trial balance. */
+export async function registerInstall(): Promise<{
+  token: string;
+  remaining: number;
+}> {
+  const response = await fetch(`${API_BASE}/v1/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code }),
+    body: "{}",
   });
   const body = await responseBody(response);
   if (
@@ -42,10 +44,36 @@ export async function activateInvite(
     typeof body.remaining !== "number"
   ) {
     throw new PapernameApiError(
-      typeof body.error === "string" ? body.error : "activation_failed",
+      typeof body.error === "string" ? body.error : "registration_failed",
     );
   }
   return { token: body.token, remaining: body.remaining };
+}
+
+/** Adds a gift or purchase key's names to this install's balance. */
+export async function redeemKey(
+  token: string,
+  key: string,
+): Promise<{ remaining: number; added: number }> {
+  const response = await fetch(`${API_BASE}/v1/redeem`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ key }),
+  });
+  const body = await responseBody(response);
+  if (
+    !response.ok ||
+    typeof body.remaining !== "number" ||
+    typeof body.added !== "number"
+  ) {
+    throw new PapernameApiError(
+      typeof body.error === "string" ? body.error : "redeem_failed",
+    );
+  }
+  return { remaining: body.remaining, added: body.added };
 }
 
 export async function requestGist(

@@ -6,6 +6,8 @@ import {
   googleScholarContextForPage,
 } from "../src/google-scholar";
 import { publishPageContext, type ContextMessage } from "../src/page-capture";
+import { isLikelyPdfLink, type PdfPressMessage } from "../src/pdf-press";
+import { isToastPayload, renderToast } from "../src/toast";
 
 export default defineContentScript({
   matches: [...ARTICLE_MATCHES],
@@ -14,9 +16,12 @@ export default defineContentScript({
   main(context) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let publishedSignature: string | undefined;
+    let knownPdfUrls: string[] = [];
+    let lastPress: { url: string; at: number } | undefined;
 
     const publish = (force = false) => {
       const send = async (message: ContextMessage) => {
+        knownPdfUrls = message.metadata.pdfUrls;
         const signature = JSON.stringify(message);
         if (!force && signature === publishedSignature) return;
         await chrome.runtime.sendMessage(message);
@@ -57,7 +62,7 @@ export default defineContentScript({
         attributeFilter: ["content", "href"],
       });
     }
-    const refresh = (message: unknown) => {
+    const onMessage = (message: unknown) => {
       if (
         message &&
         typeof message === "object" &&
@@ -65,31 +70,54 @@ export default defineContentScript({
         message.type === "papername:refresh-context"
       ) {
         publish(true);
+        return;
       }
+      if (isToastPayload(message)) renderToast(document, message);
     };
-    chrome.runtime.onMessage.addListener(refresh);
+    chrome.runtime.onMessage.addListener(onMessage);
 
-    const publishScholarResult = (event: Event) => {
+    // A pointerdown and its click both arrive for one press; report it once.
+    const reportPress = (url: string) => {
+      const at = Date.now();
+      if (lastPress && lastPress.url === url && at - lastPress.at < 1_000)
+        return;
+      lastPress = { url, at };
+      const message: PdfPressMessage = {
+        type: "papername:pdf-press",
+        pageUrl: location.href,
+        url,
+      };
+      void chrome.runtime.sendMessage(message).catch(() => undefined);
+    };
+
+    const onPress = (event: Event) => {
       if (event instanceof KeyboardEvent && event.key !== "Enter") return;
       const link =
         event.target instanceof Element
           ? event.target.closest<HTMLAnchorElement>("a[href]")
           : null;
       if (!link) return;
-      const message = googleScholarContextForLink(link, location.href);
-      if (message) void chrome.runtime.sendMessage(message);
+      const scholarMessage = googleScholarContextForLink(link, location.href);
+      if (scholarMessage) {
+        void chrome.runtime
+          .sendMessage(scholarMessage)
+          .catch(() => undefined)
+          .finally(() => reportPress(link.href));
+        return;
+      }
+      if (isLikelyPdfLink(link.href, knownPdfUrls)) reportPress(link.href);
     };
-    document.addEventListener("pointerdown", publishScholarResult, true);
-    document.addEventListener("click", publishScholarResult, true);
-    document.addEventListener("keydown", publishScholarResult, true);
+    document.addEventListener("pointerdown", onPress, true);
+    document.addEventListener("click", onPress, true);
+    document.addEventListener("keydown", onPress, true);
 
     context.onInvalidated(() => {
       if (timer) clearTimeout(timer);
       observer.disconnect();
-      chrome.runtime.onMessage.removeListener(refresh);
-      document.removeEventListener("pointerdown", publishScholarResult, true);
-      document.removeEventListener("click", publishScholarResult, true);
-      document.removeEventListener("keydown", publishScholarResult, true);
+      chrome.runtime.onMessage.removeListener(onMessage);
+      document.removeEventListener("pointerdown", onPress, true);
+      document.removeEventListener("click", onPress, true);
+      document.removeEventListener("keydown", onPress, true);
     });
   },
 });

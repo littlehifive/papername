@@ -1,6 +1,8 @@
 import {
   buildFilename,
   findMatchingContext,
+  hasValidGistShape,
+  usesTakeaway,
   type ArticleContext,
   type DownloadCandidate,
   type Preset,
@@ -12,7 +14,8 @@ export interface ExtensionSettings {
   preset: Preset;
   gistConsent: boolean;
   telemetryEnabled: boolean;
-  betaToken?: string;
+  toastEnabled: boolean;
+  apiToken?: string;
   remaining?: number;
   proInterest?: boolean;
 }
@@ -24,11 +27,22 @@ export interface GistResponse {
   remaining: number;
 }
 
+/** A takeaway request already running because the user pressed a PDF link. */
+export interface PendingGist {
+  startedAt: number;
+  promise: Promise<GistResponse>;
+}
+
 export interface DownloadDecision {
   suggestion?: string;
   outcome: "renamed" | "fallback" | "unchanged";
   reason: RenameReason | "disabled" | "unmatched_download";
   remaining?: number;
+  /** The article context that named this download, for toasts and caching. */
+  tabId?: number;
+  pageUrl?: string;
+  /** A validated takeaway worth keeping on the context for a repeat save. */
+  takeaway?: string;
 }
 
 export interface DecideDownloadInput {
@@ -39,21 +53,21 @@ export interface DecideDownloadInput {
     metadata: ArticleContext["metadata"],
     signal: AbortSignal,
   ) => Promise<GistResponse>;
+  pendingGist?: (context: ArticleContext) => PendingGist | undefined;
   timeoutMs?: number;
   now?: () => number;
 }
 
-function isValidClientGist(
+/** Hold from Chrome's filename hook when nothing was started earlier. */
+export const HOOK_WAIT_MS = 1_500;
+/** Total window measured from the PDF-link press that started the request. */
+export const PRESS_WINDOW_MS = 2_500;
+
+export function isValidClientGist(
   value: string | undefined,
   metadata: ArticleContext["metadata"],
 ): value is string {
-  if (
-    !value ||
-    /[\\/:*?"<>|\u0000-\u001f\u007f]/.test(value) ||
-    /[.!?]$/.test(value.trim())
-  )
-    return false;
-  const words = value.trim().split(/\s+/);
+  if (!value || !hasValidGistShape(value)) return false;
   const tokens = (text: string) =>
     text
       .normalize("NFKC")
@@ -73,89 +87,88 @@ function isValidClientGist(
       author.familyName?.trim() || author.name.trim().split(/\s+/).at(-1);
     return Boolean(family && containsSequence(tokens(family)));
   });
-  return (
-    words.length >= 6 &&
-    words.length <= 12 &&
-    [...value].length <= 120 &&
-    !repeatsYear &&
-    !repeatsAuthor
-  );
+  return !repeatsYear && !repeatsAuthor;
 }
 
 function fromFilename(
   result: ReturnType<typeof buildFilename>,
+  context?: ArticleContext,
 ): DownloadDecision {
   return {
     ...(result.filename ? { suggestion: result.filename } : {}),
     outcome: result.outcome,
     reason: result.reason,
+    ...(context ? { tabId: context.tabId, pageUrl: context.pageUrl } : {}),
   };
 }
+
+type GistFailure = NonNullable<
+  Parameters<typeof buildFilename>[0]["gistFailure"]
+>;
 
 export async function decideDownload(
   input: DecideDownloadInput,
 ): Promise<DownloadDecision> {
   if (!input.settings.enabled)
     return { outcome: "unchanged", reason: "disabled" };
-  const context = findMatchingContext(
-    input.contexts,
-    input.download,
-    input.now?.() ?? Date.now(),
-  );
+  const now = input.now?.() ?? Date.now();
+  const context = findMatchingContext(input.contexts, input.download, now);
   if (!context) return { outcome: "unchanged", reason: "unmatched_download" };
 
-  if (input.settings.preset !== "citation_gist") {
+  const preset = input.settings.preset;
+  if (!usesTakeaway(preset)) {
     return fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: input.settings.preset,
-      }),
+      buildFilename({ metadata: context.metadata, preset }),
+      context,
     );
   }
 
-  if (!context.metadata.authors.some((author) => author.name.trim())) {
-    return fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: "citation_gist",
-        gistFailure: "gist_unavailable",
-      }),
+  const fallback = (gistFailure: GistFailure) =>
+    fromFilename(
+      buildFilename({ metadata: context.metadata, preset, gistFailure }),
+      context,
     );
+
+  if (
+    preset === "citation_gist" &&
+    !context.metadata.authors.some((author) => author.name.trim())
+  ) {
+    return fallback("gist_unavailable");
   }
 
-  if (!context.metadata.abstract) {
-    return fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: "citation_gist",
-        gistFailure: "missing_abstract",
-      }),
-    );
+  if (isValidClientGist(context.takeaway, context.metadata)) {
+    return {
+      ...fromFilename(
+        buildFilename({
+          metadata: context.metadata,
+          preset,
+          gist: context.takeaway,
+        }),
+        context,
+      ),
+      ...(typeof input.settings.remaining === "number"
+        ? { remaining: input.settings.remaining }
+        : {}),
+    };
   }
+
+  if (!context.metadata.abstract) return fallback("missing_abstract");
   if (
     !input.settings.gistConsent ||
-    !input.settings.betaToken ||
+    !input.settings.apiToken ||
     !input.requestGist
   ) {
-    return fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: "citation_gist",
-        gistFailure: "gist_unavailable",
-      }),
-    );
+    return fallback("gist_unavailable");
   }
 
+  const pending = input.pendingGist?.(context);
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<{ type: "timeout" }>((resolve) => {
-    timer = setTimeout(
-      () => resolve({ type: "timeout" }),
-      input.timeoutMs ?? 1_500,
-    );
-  });
-  const request = input
-    .requestGist(context.metadata, controller.signal)
+  const waitMs = pending
+    ? Math.max(0, pending.startedAt + PRESS_WINDOW_MS - now)
+    : (input.timeoutMs ?? HOOK_WAIT_MS);
+  const request = (
+    pending?.promise ?? input.requestGist(context.metadata, controller.signal)
+  )
     .then((response) => ({ type: "response" as const, response }))
     .catch((error: unknown) => ({
       type: "error" as const,
@@ -174,27 +187,20 @@ export async function decideDownload(
           ? error.remaining
           : undefined,
     }));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ type: "timeout" }>((resolve) => {
+    timer = setTimeout(() => resolve({ type: "timeout" }), waitMs);
+  });
   const settled = await Promise.race([request, timeout]);
   if (timer) clearTimeout(timer);
 
   if (settled.type === "timeout") {
-    controller.abort();
-    return fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: "citation_gist",
-        gistFailure: "gist_timeout",
-      }),
-    );
+    // A press-started request keeps running so its answer can be cached.
+    if (!pending) controller.abort();
+    return fallback("gist_timeout");
   }
   if (settled.type === "error") {
-    const result = fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: "citation_gist",
-        gistFailure: settled.reason,
-      }),
-    );
+    const result = fallback(settled.reason);
     return typeof settled.remaining === "number"
       ? { ...result, remaining: settled.remaining }
       : result;
@@ -203,24 +209,24 @@ export async function decideDownload(
     !settled.response.usable ||
     !isValidClientGist(settled.response.gist, context.metadata)
   ) {
-    const result = fromFilename(
-      buildFilename({
-        metadata: context.metadata,
-        preset: "citation_gist",
-        gistFailure: settled.response.usable
-          ? "invalid_gist"
-          : "gist_unavailable",
-      }),
-    );
-    return { ...result, remaining: settled.response.remaining };
+    return {
+      ...fallback(
+        settled.response.usable ? "invalid_gist" : "gist_unavailable",
+      ),
+      remaining: settled.response.remaining,
+    };
   }
 
-  const result = fromFilename(
-    buildFilename({
-      metadata: context.metadata,
-      preset: "citation_gist",
-      gist: settled.response.gist,
-    }),
-  );
-  return { ...result, remaining: settled.response.remaining };
+  return {
+    ...fromFilename(
+      buildFilename({
+        metadata: context.metadata,
+        preset,
+        gist: settled.response.gist,
+      }),
+      context,
+    ),
+    remaining: settled.response.remaining,
+    takeaway: settled.response.gist,
+  };
 }

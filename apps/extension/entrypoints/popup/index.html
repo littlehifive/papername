@@ -59,6 +59,7 @@
           <option value="citation_gist">
             Authors, year &amp; key takeaway
           </option>
+          <option value="gist">Key takeaway</option>
         </select>
         <div class="format-preview" aria-live="polite">
           <div class="format-preview-row">
@@ -72,35 +73,59 @@
         </div>
       </section>
 
-      <details id="activation" class="activation-card" hidden>
+      <section id="quota" hidden>
+        <span>Key takeaway names left</span>
+        <strong id="remaining">—</strong>
+      </section>
+
+      <details id="redeem-card" class="activation-card">
         <summary>
           <span>
-            <strong>Have a beta access code?</strong>
-            <small>One-time invite, not an API key</small>
+            <strong>Have an access key?</strong>
+            <small>Gift or purchase key, not an API key</small>
           </span>
         </summary>
         <div class="activation-content">
-          <label for="invite">Beta access code</label>
-          <p id="activation-description" class="field-help">
-            Enter the one-time code from your beta invitation to use AI key
-            takeaways. This is not an API key.
+          <label for="access-key">Access key</label>
+          <p id="redeem-description" class="field-help">
+            Adds the key's names to this browser. Your first 10 key takeaways
+            are free without any key.
           </p>
           <div class="row">
             <input
-              id="invite"
+              id="access-key"
               autocomplete="off"
-              placeholder="Enter invite code"
+              placeholder="Enter access key"
             />
-            <button id="activate" type="button">Unlock</button>
+            <button id="redeem" type="button">Add names</button>
           </div>
-          <p id="activation-message" class="message"></p>
+          <p id="redeem-message" class="message"></p>
         </div>
       </details>
 
-      <section id="quota" hidden>
-        <span>AI key takeaways left this month</span>
-        <strong id="remaining">—</strong>
-      </section>
+      <label id="toast-card" class="card telemetry" for="toast">
+        <span class="telemetry-copy">
+          <strong>Show a note on the page while naming</strong>
+          <small id="toast-description">
+            A small corner note appears while a key takeaway is being prepared,
+            then shows the final name or why the title was used instead.
+          </small>
+        </span>
+        <span class="toggle">
+          <input
+            id="toast"
+            type="checkbox"
+            role="switch"
+            aria-describedby="toast-description"
+          />
+          <span class="toggle-track" aria-hidden="true">
+            <span class="toggle-thumb"></span>
+          </span>
+          <span id="toast-state" class="toggle-state" aria-hidden="true"
+            >On</span
+          >
+        </span>
+      </label>
 
       <section class="card status latest-result">
         <div class="status-heading">
@@ -119,13 +144,13 @@
         <p id="last-outcome">No eligible PDF handled yet.</p>
       </section>
 
-      <label class="card telemetry" for="telemetry">
+      <label id="telemetry-card" class="card telemetry" for="telemetry">
         <span class="telemetry-copy">
           <strong>Share anonymous usage data</strong>
           <small id="telemetry-description">
-            When on, Papername sends feature choices, rename success, error
-            reason, timing, and app version after beta activation. Never paper
-            titles, abstracts, filenames, or websites. Turn it off any time.
+            Off by default. When on, Papername sends feature choices, rename
+            success, error reason, timing, and app version. Never paper titles,
+            abstracts, filenames, or websites. Turn it off any time.
           </small>
         </span>
         <span class="toggle">
@@ -139,7 +164,7 @@
             <span class="toggle-thumb"></span>
           </span>
           <span id="telemetry-state" class="toggle-state" aria-hidden="true"
-            >On</span
+            >Off</span
           >
         </span>
       </label>
@@ -170,8 +195,10 @@
       <form method="dialog">
         <h2>Use AI-generated key takeaways?</h2>
         <p>
-          To create a short takeaway for the filename, Papername sends the
-          paper's title and abstract — not the PDF — to an AI service.
+          When you press a PDF link on an article page, Papername sends the
+          paper's title and abstract — not the PDF — to an AI service that
+          writes a short takeaway for the filename. Your first 10 takeaways are
+          free.
         </p>
         <p>
           Papername does not store this content. The AI provider does not use

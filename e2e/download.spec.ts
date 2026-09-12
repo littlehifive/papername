@@ -290,16 +290,19 @@ test("publishes article metadata and registers the browser filename hook", async
       "background-color",
       "rgb(79, 70, 229)",
     );
-    await expect(popup.locator("#telemetry")).toBeChecked();
+    await expect(popup.locator("#toast")).toBeChecked();
+    await expect(popup.locator("#toast")).toHaveAttribute("role", "switch");
+    await expect(popup.locator("#toast-state")).toHaveText("On");
+    await expect(popup.locator("#telemetry")).not.toBeChecked();
     await expect(popup.locator("#telemetry")).toHaveAttribute("role", "switch");
+    await expect(popup.locator("#telemetry-state")).toHaveText("Off");
+    await popup.locator("#telemetry-card").click();
+    await expect(popup.locator("#telemetry")).toBeChecked();
     await expect(popup.locator("#telemetry-state")).toHaveText("On");
-    await expect(popup.locator(".telemetry .toggle-track")).toHaveCSS(
+    await expect(popup.locator("#telemetry-card .toggle-track")).toHaveCSS(
       "background-color",
       "rgb(79, 70, 229)",
     );
-    await popup.locator(".telemetry").click();
-    await expect(popup.locator("#telemetry")).not.toBeChecked();
-    await expect(popup.locator("#telemetry-state")).toHaveText("Off");
     await expect
       .poll(() =>
         worker.evaluate(
@@ -308,7 +311,10 @@ test("publishes article metadata and registers the browser filename hook", async
               ?.telemetryEnabled,
         ),
       )
-      .toBe(false);
+      .toBe(true);
+    await expect(popup.locator('option[value="gist"]')).toHaveText(
+      "Key takeaway",
+    );
     await expect(popup.locator("#site-actions")).toBeHidden();
     await expect(popup.locator("#last-outcome")).toHaveText(
       "Williams & Bargh (2008) — Warm hands, warm heart.pdf",
@@ -326,33 +332,46 @@ test("publishes article metadata and registers the browser filename hook", async
   }
 });
 
-test("activates a beta invite and records explicit gist consent", async () => {
+test("provisions a free trial on consent and redeems an access key", async () => {
   const { context, extensionId, worker } = await launchExtension();
   try {
     await routePaper(context);
-    await context.route("http://127.0.0.1:8787/v1/activate", (route) =>
+    await context.route("http://127.0.0.1:8787/v1/register", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ token: "test-token-123456", remaining: 30 }),
+        body: JSON.stringify({ token: "test-token-123456", remaining: 10 }),
       }),
     );
+    await context.route("http://127.0.0.1:8787/v1/redeem", async (route) => {
+      expect(route.request().headers()["authorization"]).toBe(
+        "Bearer test-token-123456",
+      );
+      // The popup trims; the Worker uppercases and hashes.
+      expect(route.request().postDataJSON()).toEqual({ key: "gift-test" });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ remaining: 310, added: 300 }),
+      });
+    });
     const page = await context.newPage();
     await page.goto(articleUrl);
     await waitForArticleContext(worker);
 
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await expect(popup.locator("#activation")).toBeVisible();
-    await expect(popup.locator("#activation summary")).toContainText(
-      "One-time invite, not an API key",
+    await expect(popup.locator("#redeem-card")).toBeVisible();
+    await expect(popup.locator("#redeem-card summary")).toContainText(
+      "Gift or purchase key, not an API key",
     );
-    await expect(popup.locator("#activation")).not.toHaveAttribute("open", "");
-    await expect(popup.locator(".telemetry strong")).toHaveText(
+    await expect(popup.locator("#redeem-card")).not.toHaveAttribute("open", "");
+    await expect(popup.locator("#quota")).toBeHidden();
+    await expect(popup.locator("#telemetry-card strong")).toHaveText(
       "Share anonymous usage data",
     );
-    await expect(popup.locator(".telemetry small")).toContainText(
-      "feature choices, rename success, error reason, timing, and app version",
+    await expect(popup.locator("#telemetry-card small")).toContainText(
+      "Off by default.",
     );
     await expect(popup.locator("#pro-interest")).toHaveText(
       "I'd buy you a coffee ☕",
@@ -367,27 +386,35 @@ test("activates a beta invite and records explicit gist consent", async () => {
       "Use AI-generated key takeaways?",
     );
     await expect(popup.locator("#consent")).toContainText(
-      "Papername sends the paper's title and abstract — not the PDF — to an AI service.",
+      "When you press a PDF link on an article page, Papername sends the paper's title and abstract — not the PDF — to an AI service",
+    );
+    await expect(popup.locator("#consent")).toContainText(
+      "Your first 10 takeaways are free.",
     );
     await expect(popup.locator("#consent")).toContainText(
       "may keep copies in safety logs for up to 30 days",
     );
     await popup.locator('#consent button[value="accept"]').click();
     await expect(popup.locator("#preset")).toHaveValue("citation_gist");
-    await expect(popup.locator("#activation")).toBeVisible();
-    await expect(popup.locator("#activation")).toHaveAttribute("open", "");
-    await expect(popup.locator('#activation label[for="invite"]')).toHaveText(
-      "Beta access code",
-    );
-    await expect(popup.locator("#activation-description")).toHaveText(
-      "Enter the one-time code from your beta invitation to use AI key takeaways. This is not an API key.",
-    );
-
-    await popup.locator("#invite").fill("BETA-TEST");
-    await popup.locator("#activate").click();
-    await expect(popup.locator("#remaining")).toHaveText("30");
+    await expect(popup.locator("#quota")).toBeVisible();
     await expect(popup.locator("#quota")).toContainText(
-      "AI key takeaways left this month",
+      "Key takeaway names left",
+    );
+    await expect(popup.locator("#remaining")).toHaveText("10");
+
+    await popup.locator("#redeem-card summary").click();
+    await popup.locator("#access-key").fill(" gift-test ");
+    await popup.locator("#redeem").click();
+    await expect(popup.locator("#redeem-message")).toHaveText(
+      "Added 300 names.",
+    );
+    await expect(popup.locator("#remaining")).toHaveText("310");
+
+    await popup.locator("#preset").selectOption("gist");
+    await expect(popup.locator("#consent")).toBeHidden();
+    await expect(popup.locator("#format-pattern")).toHaveText("[Key takeaway]");
+    await expect(popup.locator("#format-example")).toHaveText(
+      "Childhood violence shapes later health.pdf",
     );
 
     await expect
@@ -397,10 +424,12 @@ test("activates a beta invite and records explicit gist consent", async () => {
         ),
       )
       .toMatchObject({
-        betaToken: "test-token-123456",
-        remaining: 30,
+        apiToken: "test-token-123456",
+        remaining: 310,
         gistConsent: true,
-        preset: "citation_gist",
+        preset: "gist",
+        telemetryEnabled: false,
+        toastEnabled: true,
       });
   } finally {
     await context.close();

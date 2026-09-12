@@ -1,7 +1,12 @@
-import { findMatchingPageContext, type Preset } from "@papername/core";
+import {
+  findMatchingPageContext,
+  usesTakeaway,
+  type Preset,
+} from "@papername/core";
 import { browser } from "wxt/browser";
 
-import { activateInvite, sendTelemetry } from "../../src/backend";
+import { ensureApiToken } from "../../src/account";
+import { PapernameApiError, redeemKey, sendTelemetry } from "../../src/backend";
 import {
   landingPageCandidates,
   recoverDirectPdfContext,
@@ -18,14 +23,14 @@ import {
 const enabled = document.querySelector<HTMLInputElement>("#enabled")!;
 const preset = document.querySelector<HTMLSelectElement>("#preset")!;
 const telemetry = document.querySelector<HTMLInputElement>("#telemetry")!;
+const toast = document.querySelector<HTMLInputElement>("#toast")!;
 const enabledState = document.querySelector<HTMLElement>("#enabled-state")!;
 const telemetryState = document.querySelector<HTMLElement>("#telemetry-state")!;
-const activation = document.querySelector<HTMLDetailsElement>("#activation")!;
-const invite = document.querySelector<HTMLInputElement>("#invite")!;
-const activate = document.querySelector<HTMLButtonElement>("#activate")!;
-const activationMessage = document.querySelector<HTMLElement>(
-  "#activation-message",
-)!;
+const toastState = document.querySelector<HTMLElement>("#toast-state")!;
+const redeemCard = document.querySelector<HTMLDetailsElement>("#redeem-card")!;
+const accessKey = document.querySelector<HTMLInputElement>("#access-key")!;
+const redeem = document.querySelector<HTMLButtonElement>("#redeem")!;
+const redeemMessage = document.querySelector<HTMLElement>("#redeem-message")!;
 const quota = document.querySelector<HTMLElement>("#quota")!;
 const remaining = document.querySelector<HTMLElement>("#remaining")!;
 const lastOutcome = document.querySelector<HTMLElement>("#last-outcome")!;
@@ -65,6 +70,17 @@ const FORMAT_PREVIEWS: Record<Preset, { pattern: string; example: string }> = {
     pattern: "[Authors] ([Year]) — [Key takeaway]",
     example: "Wu et al. (2021) — Childhood violence shapes later health.pdf",
   },
+  gist: {
+    pattern: "[Key takeaway]",
+    example: "Childhood violence shapes later health.pdf",
+  },
+};
+
+const REDEEM_MESSAGES: Record<string, string> = {
+  invalid_key: "Enter the full access key.",
+  key_unknown: "Papername doesn't recognize this key.",
+  key_used: "This key has already been used.",
+  unauthorized: "Could not verify this browser. Try again.",
 };
 
 let currentTab: { id: number; url: string } | undefined;
@@ -220,10 +236,15 @@ async function render(): Promise<void> {
   renderFormatPreview(settings.preset);
   telemetry.checked = settings.telemetryEnabled;
   renderToggleState(telemetry, telemetryState);
-  activation.hidden = Boolean(settings.betaToken);
-  activation.open = !settings.betaToken && settings.preset === "citation_gist";
-  quota.hidden = !settings.betaToken;
+  toast.checked = settings.toastEnabled;
+  renderToggleState(toast, toastState);
+  quota.hidden = !settings.apiToken;
   remaining.textContent = String(settings.remaining ?? "—");
+  redeemCard.open =
+    redeemCard.open ||
+    (usesTakeaway(settings.preset) &&
+      Boolean(settings.apiToken) &&
+      settings.remaining === 0);
   if (settings.proInterest) {
     proInterest.textContent = "Thanks — that means a lot!";
     proInterest.disabled = true;
@@ -282,15 +303,23 @@ enabled.addEventListener("change", async () => {
   await updateSettings({ enabled: enabled.checked });
   await renderSiteAccess(enabled.checked);
 });
-telemetry.addEventListener("change", () => {
+telemetry.addEventListener("change", async () => {
   renderToggleState(telemetry, telemetryState);
-  void updateSettings({ telemetryEnabled: telemetry.checked });
+  await updateSettings({ telemetryEnabled: telemetry.checked });
+  if (telemetry.checked) {
+    await ensureApiToken();
+    await render();
+  }
+});
+toast.addEventListener("change", () => {
+  renderToggleState(toast, toastState);
+  void updateSettings({ toastEnabled: toast.checked });
 });
 
 preset.addEventListener("change", async () => {
   const nextPreset = preset.value as Preset;
   const settings = await getSettings();
-  if (nextPreset === "citation_gist" && !settings.gistConsent) {
+  if (usesTakeaway(nextPreset) && !settings.gistConsent) {
     consent.showModal();
     const accepted = await new Promise<boolean>((resolve) => {
       consent.addEventListener(
@@ -307,12 +336,14 @@ preset.addEventListener("change", async () => {
     await updateSettings({ gistConsent: true });
   }
   await setPreset(nextPreset);
-  if (nextPreset === "citation_gist") {
+  if (usesTakeaway(nextPreset)) {
+    // The trial balance is provisioned as soon as the feature is enabled.
+    await ensureApiToken();
     await refreshActiveContext();
   }
   const updated = await getSettings();
-  if (updated.telemetryEnabled && updated.betaToken) {
-    void sendTelemetry(updated.betaToken, {
+  if (updated.telemetryEnabled && updated.apiToken) {
+    void sendTelemetry(updated.apiToken, {
       event: "preset_changed",
       preset: nextPreset,
       outcome: "selected",
@@ -341,27 +372,31 @@ copyLastOutcome.addEventListener("click", async () => {
   }
 });
 
-activate.addEventListener("click", async () => {
-  activate.disabled = true;
-  activationMessage.textContent = "Activating…";
+redeem.addEventListener("click", async () => {
+  const key = accessKey.value.trim();
+  if (!key) {
+    redeemMessage.textContent = REDEEM_MESSAGES.invalid_key!;
+    return;
+  }
+  redeem.disabled = true;
+  redeemMessage.textContent = "Adding names…";
   try {
-    const result = await activateInvite(invite.value);
-    await updateSettings({
-      betaToken: result.token,
-      remaining: result.remaining,
-    });
-    invite.value = "";
-    activationMessage.textContent = "";
+    const token = await ensureApiToken();
+    if (!token) throw new PapernameApiError("unreachable");
+    const result = await redeemKey(token, key);
+    await updateSettings({ remaining: result.remaining });
+    accessKey.value = "";
+    redeemMessage.textContent = `Added ${result.added} names.`;
     const settings = await getSettings();
-    if (settings.preset === "citation_gist") await refreshActiveContext();
+    if (usesTakeaway(settings.preset)) await refreshActiveContext();
     await render();
   } catch (error) {
-    activationMessage.textContent =
-      error instanceof Error
-        ? error.message.replaceAll("_", " ")
-        : "Activation failed";
+    const reason =
+      error instanceof PapernameApiError ? error.reason : "unreachable";
+    redeemMessage.textContent =
+      REDEEM_MESSAGES[reason] ?? "Could not reach Papername. Try again.";
   } finally {
-    activate.disabled = false;
+    redeem.disabled = false;
   }
 });
 
@@ -370,8 +405,8 @@ proInterest.addEventListener("click", async () => {
   await updateSettings({ proInterest: true });
   proInterest.textContent = "Thanks — that means a lot!";
   proInterest.disabled = true;
-  if (settings.telemetryEnabled && settings.betaToken) {
-    void sendTelemetry(settings.betaToken, {
+  if (settings.telemetryEnabled && settings.apiToken) {
+    void sendTelemetry(settings.apiToken, {
       event: "pro_interest",
       preset: settings.preset,
       outcome: "interested",
@@ -394,6 +429,12 @@ browser.storage.onChanged.addListener((changes, area) => {
     Object.keys(changes).some((key) => key.startsWith("articleContext:"))
   ) {
     void getSettings().then((settings) => renderSiteAccess(settings.enabled));
+  }
+  if (area === "local" && "settings" in changes) {
+    void getSettings().then((settings) => {
+      quota.hidden = !settings.apiToken;
+      remaining.textContent = String(settings.remaining ?? "—");
+    });
   }
 });
 void refreshActiveContext();

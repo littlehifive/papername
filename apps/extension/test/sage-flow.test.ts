@@ -99,6 +99,7 @@ describe("observed SAGE article-to-reader flow", () => {
           preset: "citation",
           gistConsent: false,
           telemetryEnabled: false,
+          toastEnabled: true,
         },
       }),
     ).toMatchObject({
@@ -136,6 +137,7 @@ describe("observed SAGE article-to-reader flow", () => {
           preset: "citation",
           gistConsent: false,
           telemetryEnabled: false,
+          toastEnabled: true,
         },
       }),
     ).toMatchObject({ outcome: "unchanged" });
