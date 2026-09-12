@@ -9,7 +9,7 @@
     "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e",
     "dev:extension": "pnpm --filter @papername/extension dev",
     "dev:worker": "pnpm --filter @papername/worker dev",
-    "eval:gists": "node evals/run.mjs",
+    "eval:gists": "node --experimental-strip-types evals/run.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run && pnpm --filter @papername/worker test:d1",

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "openai-fast",
+    "provider": "openai",
+    "model": "REPLACE-with-the-current-fastest-non-reasoning-OpenAI-model",
+    "apiKeyEnv": "OPENAI_API_KEY"
+  },
+  {
+    "id": "workers-ai",
+    "provider": "openai-compatible",
+    "baseUrl": "https://api.cloudflare.com/client/v4/accounts/REPLACE-account-id/ai/v1",
+    "model": "REPLACE-with-a-small-instruct-model-id",
+    "apiKeyEnv": "CLOUDFLARE_API_TOKEN"
+  },
+  {
+    "id": "fast-host",
+    "provider": "openai-compatible",
+    "baseUrl": "https://REPLACE-host/openai/v1",
+    "model": "REPLACE-with-a-small-open-model-id",
+    "apiKeyEnv": "FAST_HOST_API_KEY"
+  }
+]

@@ -7,6 +7,8 @@ coverage/
 .dev.vars
 .env.production
 invites*.sql
+gift-keys*.sql
+evals/candidates.json
 *.tsbuildinfo
 .DS_Store
 playwright-report/

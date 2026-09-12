@@ -43,6 +43,6 @@ For direct PDFs, Papername can explicitly recover a record page only from narrow
 - Google Scholar proxy naming requires the download to retain the selected link as its original or final URL. Session-bound links, browser-extension handoffs, or opaque redirect chains can defeat that match.
 - Paywalls and access controls remain in force. Papername names only files the user is entitled to download.
 - Scanned PDFs, encrypted files, blob URLs, session-bound downloads, missing metadata, and customized repository routes may not be recoverable. Papername leaves uncertain downloads unchanged instead of guessing.
-- Local extraction, including Google Scholar result capture, has no marginal API or LLM cost. Only the optional hosted gist preset consumes the existing monthly generation allowance.
+- Local extraction, including Google Scholar result capture, has no marginal API or LLM cost. Only the optional hosted key-takeaway presets spend a name from the prepaid balance.
 
 The evidence and operational rationale are recorded in [Academic Source Coverage Research](SOURCE_COVERAGE_RESEARCH.md).

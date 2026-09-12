@@ -1,6 +1,6 @@
 # Papername MVP Product Requirements
 
-Status: `implemented-comprehensive-local-mvp`; production beta gates remain in Further Notes
+Status: `implemented-comprehensive-local-mvp`; production beta gates remain in Further Notes. Pricing decisions: `docs/adr/0001-prepaid-key-takeaway-credits.md`.
 
 ## Problem Statement
 
@@ -10,11 +10,11 @@ Papername must rename an academic PDF as it is downloaded from a supported artic
 
 ## Solution
 
-Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic metadata from article pages, associates that metadata with the corresponding PDF download, and uses Chrome's download filename suggestion interface to apply one of four built-in presets automatically. It requests HTTP(S) page access at installation because automatic coverage across publishers, university proxies, and institution-specific repositories is the product's core function. This permission and its local-only use must be disclosed prominently before installation; users can later restrict Papername through Chrome's built-in Site access controls.
+Papername is a private-beta Chrome/Chromium extension. It extracts bibliographic metadata from article pages, associates that metadata with the corresponding PDF download, and uses Chrome's download filename suggestion interface to apply one of five built-in presets automatically. It requests HTTP(S) page access at installation because automatic coverage across publishers, university proxies, and institution-specific repositories is the product's core function. This permission and its local-only use must be disclosed prominently before installation; users can later restrict Papername through Chrome's built-in Site access controls.
 
-The default is an APA-like citation label such as `Wu et al. (2026).pdf`. Alternatives add the full title, use the title alone, or combine the citation label with a short English gist. Citation and title naming run locally. Gist mode sends only the title and abstract to a rate-limited Cloudflare Worker, which calls a fast hosted language model and returns a strictly validated short phrase. The backend stores no paper content.
+The default is an APA-like citation label such as `Wu et al. (2026).pdf`. Alternatives add the full title, use the title alone, combine the citation label with a short English key takeaway, or use the key takeaway alone. Citation and title naming run locally. The key-takeaway presets send only the title and abstract to a Cloudflare Worker, which calls a fast hosted language model and returns a strictly validated 4–10 word claim. The request starts when the user presses a PDF link so the answer is usually ready before the download begins, and a small in-page toast reports what happened. The backend stores no paper content.
 
-The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using citation-plus-gist. Billing and customization are not built; a small “I'd buy you a coffee” action records interest locally without implying that checkout or a paid tier already exists. Its aggregate count is shared only when anonymous usage data is enabled and the tester has activated beta access.
+The MVP is distributed privately to 25 trusted testers for two weeks. It validates cross-site filename reliability and whether at least eight testers continue using a key-takeaway preset. Key takeaways run on prepaid names: every install receives 10 free names without an account, and gift or purchase keys add more to the same balance. Purchases are switched off during the beta; testers receive gift keys, and a small “I'd buy you a coffee” action records interest locally without implying that checkout or a paid tier already exists. Its aggregate count is shared only when anonymous usage data is switched on.
 
 ## User Stories
 
@@ -22,13 +22,15 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 2. As a researcher, I want `Wu et al. (2026)` to be the default format, so that files are compact and recognizable.
 3. As a researcher, I want a citation-plus-title preset, so that papers from the same author and year remain distinguishable.
 4. As a researcher, I want a title-only preset, so that I can scan a folder by topic.
-5. As a researcher, I want a citation-plus-gist preset, so that I can remember a paper's main contribution without opening it.
+5. As a researcher, I want a citation-plus-key-takeaway preset, so that I can remember a paper's main contribution without opening it.
+   5a. As a researcher, I want a key-takeaway-only preset that falls back to the title, so that a folder can read as a list of findings.
 6. As a researcher, I want gist wording to preserve uncertainty, negation, and direction, so that the filename does not overstate the abstract.
 7. As a researcher, I want methods, review, and theoretical papers described by their contribution rather than a fabricated empirical result.
 8. As a researcher, I want non-English titles and names preserved, so that bibliographic metadata is not corrupted.
 9. As a researcher, I want the gist in English during the beta, so that output quality follows one testable standard.
 10. As a researcher, I want downloads to happen without a confirmation dialog, so that Papername removes rather than adds work.
-11. As a researcher, I want a download to wait no more than 1.5 seconds for AI, so that a slow service does not interrupt my workflow.
+11. As a researcher, I want the key-takeaway request to start when I press a PDF link and the download to wait no more than about 1.5 seconds beyond that, so that a slow service does not interrupt my workflow.
+    11a. As a researcher, I want a small in-page note while a takeaway is prepared and a plain reason when the title was used instead, so that a fallback never looks like a broken feature, and I want to be able to switch that note off.
 12. As a researcher, I want citation-plus-title used when a gist is unavailable, so that I still receive a useful filename.
 13. As a researcher, I want the site's original filename preserved when Papername is uncertain, so that unrelated files are never mislabeled.
 14. As a researcher, I want supplementary files left alone, so that they are not confused with the main article.
@@ -40,24 +42,26 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 20. As a researcher, I want to turn Papername off quickly, so that I can download a file unchanged when needed.
 21. As a researcher, I want to change filename formats from a small toolbar popup, so that configuration is immediate.
 22. As a researcher, I want to see and copy the latest generated filename, so that I can reuse it if I miss the download notification.
-23. As a key-takeaway user, I want to see my remaining monthly allowance, so that a fallback is not surprising.
+23. As a key-takeaway user, I want to see how many names I have left, so that a fallback is not surprising.
+    23a. As a new user, I want 10 free key takeaways on my own papers without creating an account, so that I can judge the feature before paying.
+    23b. As a paying user, I want a name spent only when a takeaway was actually produced in time, so that outages and slow answers cost me nothing.
 24. As a privacy-conscious researcher, I want citation and title presets to work without sending paper content to Papername's server.
 25. As a privacy-conscious researcher, I want explicit consent before the first AI-generated key takeaway, so that I understand the data boundary in plain language.
 26. As a privacy-conscious researcher, I want the disclosure to state the provider's possible abuse-log retention, so that it is accurate rather than reassuringly vague.
-27. As a beta tester, I want one-use invite activation, so that setup is simple without creating an account.
+27. As a beta tester, I want to redeem a one-use gift key, so that I receive a large balance without creating an account.
 28. As a beta tester, I want feedback access from the popup, so that I can report a bad name or unsupported source.
-29. As a beta tester, I want telemetry to be clearly explained and easy to switch off, so that I control whether I participate.
+29. As a beta tester, I want telemetry to be off by default, clearly explained, and easy to switch on or off, so that I control whether I participate.
 30. As a beta tester who opts in, I want Papername to send only coarse operational events, so that paper titles, abstracts, identifiers, URLs, and filenames stay private.
-31. As the product owner, I want monthly gist quotas enforced atomically, so that leaked or replayed credentials cannot create unbounded model spend.
+31. As the product owner, I want name balances decremented atomically before each model call, so that leaked or replayed credentials cannot create unbounded model spend.
 32. As the product owner, I want model credentials kept only in Worker secrets, so that they cannot be extracted from the extension.
-33. As the product owner, I want invite codes stored as hashes and usable once, so that beta access is controlled.
+33. As the product owner, I want access keys and install tokens stored as hashes and each key usable once, so that balances cannot be duplicated.
 34. As the product owner, I want unsupported and ambiguous downloads measured as typed fallback outcomes, so that reliability problems are diagnosable without collecting paper content.
 35. As the product owner, I want a truthful, explicitly non-payment coffee-interest action, so that testers can express support without fake checkout or unavailable pricing promises.
 36. As the product owner, I want the MVP to cover representative journal, repository, preprint, and engineering sources, so that cross-discipline usefulness is tested.
 37. As the product owner, I want automated extension and backend tests, so that publisher-specific fixes do not silently break core naming.
 38. As the product owner, I want an offline fixture suite, so that tests are deterministic and do not scrape live publisher sites during every run.
 39. As the product owner, I want a manual live smoke matrix before distribution, so that fixture behavior corresponds to current websites.
-40. As the product owner, I want the beta to have explicit continuation criteria, so that paid customization is built only after evidence of reliability and gist demand.
+40. As the product owner, I want the beta to have explicit continuation criteria, so that purchases are switched on only after evidence of reliability and key-takeaway demand.
 41. As a researcher, I want Papername to work automatically on an unfamiliar metadata-rich journal or repository, so that a static publisher list is not the product ceiling.
 42. As a privacy-conscious researcher, I want a clear install-time explanation of broad site access, so that I can make an informed choice before enabling automatic coverage.
 43. As a researcher, I want to restrict Papername through Chrome's Site access controls, so that I can trade automatic coverage for narrower access whenever I choose.
@@ -70,7 +74,7 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 
 - Use a pnpm TypeScript workspace with a WXT Manifest V3 extension, a shared domain package, and a plain TypeScript Cloudflare Worker backed by D1.
 - Treat the public behavioral seams as downloaded filenames, popup-visible state, and Worker HTTP responses.
-- Define four presets: `citation`, `citation_title`, `title`, and `citation_gist`. Store the active preset and consent/telemetry choices in local Chrome storage.
+- Define five presets: `citation`, `citation_title`, `title`, `citation_gist`, and `gist`. The `gist` preset falls back to the title, then the citation. Store the active preset, consent, telemetry, and toast choices in local Chrome storage.
 - Build citation labels as follows: one author `Wu (2026)`, two authors `Wu & Smith (2026)`, and three or more `Wu et al. (2026)`. Use a corporate author verbatim. Use `n.d.` when a year is unavailable and fall back to title when no author is usable.
 - Normalize filenames by preserving Unicode, converting reserved separators and control characters to readable hyphens, collapsing whitespace, trimming trailing dots/spaces, protecting reserved Windows basenames, and limiting the complete basename to 180 characters at a word boundary.
 - Extract paper metadata from citation/Dublin Core meta elements, `ScholarlyArticle` JSON-LD, EPrints fields, Digital Commons/bepress fields, and narrowly scoped site adapters. Use DOI, arXiv, or PubMed metadata lookup only when page metadata is insufficient.
@@ -82,30 +86,31 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - Associate downloads through known PDF URLs, identifiers, referrer/source relationships, and a short-lived per-tab article context. Never use a stale article context solely because it was the most recently visited page.
 - When Adobe Acrobat rewrites a PDF save to its extension origin and a UUID filename, recover identity from the active supported HTTP(S) PDF tab and then apply the same known-URL or identifier checks. Do not use the active tab as evidence for ordinary downloads.
 - Act only on PDFs confidently associated with a paper. Keep supplementary or ambiguous downloads unchanged.
-- In gist mode, start a request when the user initiates a recognized PDF action or when an eligible download begins. Hold filename determination for at most 1.5 seconds, then cancel locally and fall back.
-- Generate gists from title and abstract only. Require 6–12 English words, no author/year duplication, no path punctuation, no terminal sentence punctuation, no unsupported causal upgrade, and a faithful main reported result or contribution. Return `usable: false` when the abstract is insufficient.
-- Use `gpt-5.6-luna` with reasoning disabled, no tools, strict structured output, and provider storage disabled. Keep the model configurable so the pre-release evaluation can switch to `gpt-5.6-terra` if and only if Luna misses the fidelity threshold.
-- Expose Worker endpoints `POST /v1/activate`, `POST /v1/gist`, and `POST /v1/events`. Successful activation returns a random bearer token. Gist responses return `usable`, `gist`, `reason`, and `remaining`.
-- Limit the beta to 30 gist requests per bearer token per UTC calendar month. Count concurrent calls atomically before invoking the model. Do not refund provider failures, preventing retry abuse.
-- Hash invite codes and bearer tokens in D1. Never persist titles, abstracts, identifiers, URLs, filenames, or generated gists. Application logs must omit request bodies.
+- In a key-takeaway preset, start the request when the content script reports a pointer press on a recognized PDF link (a known PDF URL or a PDF-shaped path), or when an eligible download begins without a press. Keep the pending request on the tab so the filename hook reuses it, and hold filename determination until 2.5 seconds after the press or 1.5 seconds after the hook, whichever applies, then fall back. Keep a validated takeaway on the tab's article context so a repeat save spends nothing.
+- Show an in-page toast, on by default with a popup switch, only in key-takeaway presets: “Preparing key takeaway…”, then the final name, or the fallback reason (no abstract, out of names, took too long) followed by “used the title instead”, plus the remaining balance when it is low. Never use OS notifications.
+- Generate key takeaways from title and abstract only. Require a claim of 4–10 English words (shared rule in `@papername/core`), no author/year duplication, no path punctuation, no terminal sentence punctuation, no unsupported causal upgrade, and a faithful main reported result or contribution. Return `usable: false` when the abstract is insufficient.
+- Choose the model by measurement with the eval runner: provider p95 under about 1.2 seconds, then the fidelity rubric, then format validity; cost is a tiebreaker. Call it with reasoning disabled, no tools, strict structured output, and provider storage disabled. Keep the model name in a Worker environment variable. Build a second provider implementation only if every OpenAI candidate fails the bar.
+- Expose Worker endpoints `POST /v1/register`, `POST /v1/redeem`, `POST /v1/gist`, and `POST /v1/events`. Registration takes no input and returns a random bearer token with 10 names. Redeem validates a gift key against D1, or a purchase key against the merchant of record once purchases are switched on, and adds its names exactly once. Gist responses return `usable`, `gist`, `reason`, and `remaining`.
+- Spend one name per model call, decremented atomically before invoking the model. Refund it when the provider fails, when its output fails the shape rule, or when the provider call took longer than 2 seconds. Charge for an insufficient abstract so junk input consumes the caller's own names. Back the balance with Cloudflare rate-limiting rules on register (per IP) and gist (per token). Keep no cross-user takeaway cache.
+- Hash access keys and install tokens in D1 and store only balances beside them. Never persist titles, abstracts, identifiers, URLs, filenames, or generated takeaways. Application logs must omit request bodies.
 - Store enabled telemetry only as aggregate counters keyed by day, extension version, preset, outcome, reason, and latency bucket; never store an installation identifier with telemetry.
 - The popup exposes its current-page readiness before the filename-format selector, uses color and icons to distinguish ready, unavailable, and needs-attention states, and describes each format with replaceable-field notation plus a concrete example.
-- The popup also exposes enabled state, remaining key-takeaway quota, the latest generated filename with a copy action, privacy/feedback links, a plain-language telemetry choice that defaults on and can be switched off at any time, and an honest coffee-sized encouragement action. It does not maintain a paper library or download history.
-- The private beta listing uses the product name `Papername BETA`, includes the required testing disclosure, and is restricted to trusted testers. Each tester receives a separate one-use API invite.
-- Custom metadata templates, custom key-takeaway instructions, pricing, payments, accounts, license enforcement, and the custom editor are deferred until after the beta.
+- The popup also exposes enabled state, remaining names, a “Redeem a key” field, the page-toast switch, the latest generated filename with a copy action, privacy/feedback links, a plain-language telemetry choice that defaults off, and an honest coffee-sized encouragement action. An install token is registered lazily, only when key takeaways or telemetry are switched on, so free-preset users never contact the server. It does not maintain a paper library or download history.
+- The private beta listing uses the product name `Papername BETA`, includes the required testing disclosure, and is restricted to trusted testers. Each tester receives a separate one-use gift key worth 300 names on top of the automatic 10-name trial.
+- Custom metadata templates, custom key-takeaway instructions, live purchases, accounts, and the custom editor are deferred until after the beta. The credit model, gift keys, and the merchant-key validation seam are built now so the beta runs on the product that will be sold.
 
 ## Testing Decisions
 
 - Test only externally observable behavior at the agreed seams. Helper functions may be exercised through the shared package's exported filename and metadata contracts, not by mocking their internals.
-- Shared-domain tests cover literal filename examples, author-count rules, incomplete metadata, Unicode, unsafe characters, reserved basenames, length bounds, every preset, and every fallback.
+- Shared-domain tests cover literal filename examples, author-count rules, incomplete metadata, Unicode, unsafe characters, reserved basenames, length bounds, every preset, every fallback, and the 4–10 word takeaway shape rule.
 - Metadata tests use minimal offline HTML fixtures representing generic citation tags, Dublin Core, JSON-LD, and each supported source family. Expected metadata is authored independently from extraction logic.
 - Site-access tests cover curated, generic automatic, blocked, and direct-PDF states. Manifest integration verifies required HTTP(S) access and the ResearchGate exclusion. Route-recovery tests require a narrow deterministic record URL and reject unknown routes.
 - Extension integration tests run Chromium with the built extension, visit an intercepted publisher-page fixture, assert metadata arrival and filename-hook registration, and exercise invite/consent state through the real popup. Exported decision tests assert filenames and fallbacks. Ordinary Chrome verifies final on-disk basenames in the live smoke matrix because Playwright's download sandbox replaces filenames and does not reproduce the normal `onDeterminingFilename` event.
 - Matching tests cover multiple tabs, stale contexts, signed PDF URLs, Google Scholar proxy targets, internal PDF viewers, MIME detection, non-PDFs, supplements, unsupported sites, and ambiguous candidates.
-- Worker API-contract tests call the complete fetch handler and cover invite activation/replay, bearer authentication, input bounds, provider timeout/error/schema violations, content-free telemetry, CORS, and remaining-count responses. A Miniflare runtime suite calls the exported Worker endpoint against migrated D1 storage and verifies activation plus atomic monthly quotas.
-- Gist evaluation uses at least 60 title/abstract pairs across medicine, life science, physical science, engineering/CS, social science, and humanities. A human rubric requires at least 90% fidelity and 80% filename usefulness. If Luna fails, Terra is tested once; gist mode is not released if both fail.
+- Worker API-contract tests call the complete fetch handler and cover anonymous registration, gift and purchase key redemption and replay, bearer authentication, input bounds, refunds on provider timeout/error/schema violations and slow answers, the charge for insufficient abstracts, content-free telemetry, CORS, and remaining-balance responses. A Miniflare runtime suite calls the exported Worker endpoint against migrated D1 storage and verifies atomic spending and exactly-once redemption under concurrency.
+- Key-takeaway evaluation uses at least 60 title/abstract pairs across medicine, life science, physical science, engineering/CS, social science, and humanities, run against several candidate models with per-case latency. A human rubric requires at least 90% fidelity and 80% filename usefulness; the provider p95 must stay under about 1.2 seconds; format validity must be 100%. Key takeaways are not released if no candidate clears all three.
 - Final acceptance requires the full unit, integration, typecheck, lint, and build suite; a manual live smoke test for every supported source family is documented separately because publisher pages change and some require institutional access.
-- Beta success requires at least 90% of eligible attempts to receive the chosen filename or documented safe fallback, and at least eight of 25 testers to retain citation-plus-gist after two weeks.
+- Beta success requires at least 90% of eligible attempts to receive the chosen filename or documented safe fallback, and at least eight of 25 testers to retain a key-takeaway preset after two weeks.
 
 ## Out of Scope
 
@@ -116,12 +121,12 @@ The MVP is distributed privately to 25 trusted testers for two weeks. It validat
 - A searchable library, download history, duplicate detection, or folder organization.
 - Automatic guessing from arbitrary direct PDF URLs, first-page PDF parsing, OCR, and server-side publisher/repository crawling.
 - ResearchGate extraction or automation without written permission from ResearchGate.
-- Accounts, payments, subscriptions, licenses, custom templates, custom prompts, and paid quotas.
+- Accounts, subscriptions, postpaid metering, custom templates, and custom prompts. Live purchases until the beta gate is met.
 - Public Chrome Web Store launch, trademark registration, and production marketing assets beyond beta requirements.
 
 ## Further Notes
 
-- The MVP is deliberately a two-week, non-revenue beta. Pricing and paid customization will be explored separately after the core renaming experience is validated.
+- The MVP is deliberately a two-week, non-revenue beta. Pricing is decided (prepaid packs of 300 and 1500 names, never expiring, sold through a merchant of record with license keys) and recorded in `docs/adr/0001-prepaid-key-takeaway-credits.md`; the buy link and merchant validation call are added only after the beta gate is met.
 - The model provider does not use API inputs for training by default, but standard abuse-monitoring logs may retain customer content for up to 30 days. Consent and privacy copy must state that accurately.
 - Chrome controls filename conflict behavior. Papername must not request filesystem access merely to customize collisions.
 - Local generic metadata extraction, Google Scholar result capture, and narrow route recovery add no per-request API or LLM cost. Required all-site access creates a stronger Chrome install warning and higher disclosure/review burden. Institutional customizations, paywalls, anti-bot systems, session-bound or opaque redirects, scanned PDFs, and missing metadata prevent literal universality; those cases must remain unchanged with an actionable explanation.

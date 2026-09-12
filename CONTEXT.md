@@ -10,21 +10,26 @@ Papername is a Chrome extension that gives downloaded academic PDFs useful filen
 - **Scholar result context**: Title, author, year, and selected side-PDF URL read from the visible Google Scholar result the user activates; snippets are not treated as abstracts.
 - **Recoverable PDF route**: A recognized arXiv, EPrints, or DSpace PDF URL that deterministically maps to a same-origin article record without reading the PDF.
 - **Paper metadata**: The title, author list, publication year, abstract, identifiers, and known PDF URLs extracted from an article page.
-- **Filename format** (internally `Preset`): One of the four built-in naming styles: authors and year, authors/year/title, title, or authors/year/key takeaway.
+- **Filename format** (internally `Preset`): One of the five built-in naming styles: authors and year, authors/year/title, title, authors/year/key takeaway, or key takeaway alone.
 - **Citation label**: An APA-like compact author/year label such as `Wu et al. (2026)`.
-- **Key takeaway** (internally `Gist`): A short, faithful English statement of the paper's reported main finding or contribution.
+- **Key takeaway** (internally `Gist`): A short, faithful English claim of 4–10 words stating the paper's reported main finding or contribution.
+- **Name**: One prepaid credit, spent when the model produced a key takeaway in time.
+- **Install token**: The random bearer credential a browser receives, with 10 free names, the first time key takeaways or telemetry are enabled.
+- **Access key**: A one-use gift or purchase key that adds names to an install's balance.
+- **Download intent**: A pointer press on a recognized PDF link, which starts the key-takeaway request before the download begins.
 - **Eligible download**: A PDF download that can be confidently associated with recently extracted paper metadata.
 - **Fallback**: The deterministic filename used when a selected preset cannot be completed safely.
-- **Beta token**: A bearer credential issued after a one-use invite code is activated.
 
 ## Invariants
 
 - Ambiguous downloads are left unchanged.
 - Citation and title naming are entirely local.
-- Only title and abstract may be sent to the Papername gist API.
+- Only title and abstract may be sent to the Papername gist API, and only after a PDF-link press or a matching download.
 - After explicit gist consent, a DOI may be sent to Crossref to fill missing metadata.
-- Paper content is never persisted by the backend or telemetry pipeline.
-- A download waits at most 1.5 seconds for a gist before falling back.
+- Paper content is never persisted by the backend or telemetry pipeline, and no key-takeaway cache is shared across users.
+- A finished key takeaway lives only in the tab's short-lived article context, so a repeat save spends nothing.
+- A name is spent only when the model answered in time; provider failures and slow answers are refunded.
+- A download waits at most 1.5 seconds from the filename hook for a gist, or until 2.5 seconds after the PDF-link press that started the request, before falling back.
 - A recognized Adobe Acrobat handoff may use the active supported PDF tab URL
   locally to restore source identity; this URL is never persisted as an outcome
   or sent in telemetry.

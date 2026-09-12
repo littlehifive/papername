@@ -54,9 +54,11 @@ the beta runs on the model that will actually be sold.
 ### Billing rule
 
 9. One credit is **pre-decremented atomically** before the model call.
-10. The credit is **refunded** when the provider fails or when the Worker's
-    own provider call exceeds 2.5 seconds (the download has already fallen
-    back by then). The rule is server-side and trusts nothing from the client.
+10. The credit is **refunded** when the provider fails, when its output fails
+    the shape rule, or when the Worker's own provider call exceeds 2 seconds.
+    The client waits about 2.5 seconds from the press, so anything charged
+    arrives in time. The rule is server-side and trusts nothing from the
+    client.
 11. An "insufficient abstract" response **is charged**: the model ran, and
     charging makes junk input consume the caller's own credits rather than
     the owner's provider bill.
@@ -96,7 +98,7 @@ the beta runs on the model that will actually be sold.
     - fallback reasons: no abstract / out of names / took too long, each
       ending "used the title instead";
     - low-balance notice when few names remain (the only upsell surface).
-    The toolbar badge is the secondary cue. No OS notifications.
+      The toolbar badge is the secondary cue. No OS notifications.
 18. **Telemetry off by default.** A token is registered lazily, only when the
     user turns telemetry on or uses a takeaway. Free-preset users who do
     neither never contact the server. Beta testers are asked to switch it on.

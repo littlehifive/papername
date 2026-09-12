@@ -33,16 +33,18 @@ pnpm --filter @papername/worker exec wrangler deploy
 
 For local development, copy `apps/worker/.dev.vars.example` to `apps/worker/.dev.vars`, insert a development key, and run `pnpm dev:worker`. Never commit that file.
 
-## 3. Issue beta invites
+In the Cloudflare dashboard, add two rate-limiting rules for the Worker's route: `POST /v1/register` limited per client IP per day (a handful of installs), and `POST /v1/gist` limited per `Authorization` header to about 30 requests per minute. These back up the credit balance; nothing in code depends on them.
 
-Generate one code per tester. The generated SQL contains plaintext codes in comments, so store it outside source control and treat it as a secret:
+## 3. Issue gift keys
+
+Every install receives 10 free names automatically the first time key takeaways are enabled, so testers need nothing to start. Give each tester a gift key worth 300 names so the beta exercises the same balance and redeem flow real users will see. The generated SQL contains plaintext keys in comments, so store it outside source control and treat it as a secret:
 
 ```sh
-pnpm --filter @papername/worker --silent invites 25 > invites-beta.sql
-pnpm --filter @papername/worker exec wrangler d1 execute papername-beta --remote --file invites-beta.sql
+pnpm --filter @papername/worker --silent gift-keys 25 300 > gift-keys-beta.sql
+pnpm --filter @papername/worker exec wrangler d1 execute papername-beta --remote --file gift-keys-beta.sql
 ```
 
-Send each tester a different code. An activation atomically marks a code used and returns a random bearer token; neither plaintext value is stored in D1.
+Issue your own key with a very large balance, for example `gift-keys 1 1000000`. A key is redeemed onto an install exactly once; only hashes are stored. Purchases stay switched off during the beta: the redeem endpoint accepts gift keys only and the popup shows no buy link.
 
 ## 4. Package the extension
 
@@ -52,7 +54,7 @@ Copy `apps/extension/.env.production.example` to `apps/extension/.env.production
 pnpm --filter @papername/extension zip
 ```
 
-Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. Use a private distribution restricted to the 25 tester accounts, the name **Papername BETA**, and the disclosure **THIS EXTENSION IS FOR BETA TESTING**. The listing and pre-install tester instructions must explain that automatic cross-publisher naming requires Chrome's broad HTTP(S) site-access warning, that bibliographic metadata is processed locally, and that users can narrow access through Chrome's Site access controls. Link the packaged privacy page or publish equivalent privacy text at a stable URL. Do not claim that a paid tier, pricing, checkout, or donation link is available; the popup clearly labels its “I'd buy you a coffee” action as a local interest signal.
+Upload the zip from `apps/extension/.output` to the Chrome Web Store dashboard. Use a private distribution restricted to the 25 tester accounts, the name **Papername BETA**, and the disclosure **THIS EXTENSION IS FOR BETA TESTING**. The listing and pre-install tester instructions must explain that automatic cross-publisher naming requires Chrome's broad HTTP(S) site-access warning, that bibliographic metadata is processed locally, and that users can narrow access through Chrome's Site access controls. Link the packaged privacy page or publish equivalent privacy text at a stable URL. Do not claim that a paid tier, pricing, checkout, or donation link is available; the popup clearly labels its “I'd buy you a coffee” action as a local interest signal. The listing may say that key takeaways use free trial names and that access keys can add more.
 
 ## 5. Live smoke matrix
 
@@ -87,7 +89,7 @@ On first install or this permission-changing update, confirm Chrome displays the
 
 On Google Scholar, activate a side `[PDF]` link routed through a university proxy and confirm the filename uses the visible result's author and year. Record whether the proxy preserves the selected URL; session-bound or opaque redirects are an expected limit. On both `https://arxiv.org/pdf/2609.03012` and `https://eprints.gla.ac.uk/243676/1/243676.pdf`, invoke **Find article metadata**, then save the PDF and confirm the citation filename. Confirm an unknown direct-PDF route explains that the article page is required. Confirm ResearchGate shows the policy exclusion and offers no access action.
 
-Also verify disabled mode, duplicate-name uniquifying, Save As behavior (including Adobe Acrobat's Chrome PDF viewer when installed), missing abstract fallback, invalid invite, exhausted quota, provider outage, explicit gist consent, and telemetry opt-out.
+Also verify disabled mode, duplicate-name uniquifying, Save As behavior (including Adobe Acrobat's Chrome PDF viewer when installed), missing abstract fallback, an unknown and a replayed access key, an exhausted balance, provider outage, explicit key-takeaway consent, the page toast on a PDF-link press and its switch, the takeaway-only preset, and the telemetry opt-in.
 
 ## 6. Operate the two-week beta
 
@@ -102,4 +104,4 @@ ORDER BY day;
 
 Do not enable request-body logging. Collect qualitative reports through the popup feedback link. Continue only if at least 90% of eligible attempts are renamed or receive a documented safe fallback and at least 8 of 25 testers retain citation-plus-gist after two weeks.
 
-Before enabling gist mode for testers, run the 60-case evaluation described in `evals/README.md`; it requires an OpenAI key and human ratings. Gist mode must remain unreleased if neither configured candidate model meets the PRD thresholds.
+Before enabling key takeaways for testers, run the 60-case evaluation described in `evals/README.md` against the candidate models; it requires provider keys and human ratings. Key takeaways must remain unreleased if no candidate clears the latency, fidelity, and format bars. Telemetry is off by default, so ask testers to switch it on.
