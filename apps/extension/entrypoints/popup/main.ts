@@ -1,36 +1,39 @@
-import { findMatchingPageContext, type Preset } from "@papername/core";
+import {
+  buildFilename,
+  DEFAULT_CUSTOM_TEMPLATE,
+  findMatchingPageContext,
+  moveToken,
+  resolveTemplate,
+  TEMPLATE_MAX_TOKENS,
+  templatePattern,
+  TEXT_TOKEN_MAX_LENGTH,
+  TOKEN_LABELS,
+  UNSAFE_BASENAME_CHARS,
+  type FilenameTemplate,
+  type MetadataTokenKind,
+  type PaperMetadata,
+  type Preset,
+  type TemplateToken,
+} from "@papername/core";
 import { browser } from "wxt/browser";
 
-import { activateInvite, sendTelemetry } from "../../src/backend";
 import {
   landingPageCandidates,
   recoverDirectPdfContext,
 } from "../../src/direct-pdf";
+import type { ExtensionSettings } from "../../src/settings";
 import { siteAccessForUrl, type SiteAccess } from "../../src/site-access";
 import {
   getContexts,
   getLastOutcome,
   getSettings,
-  setPreset,
   updateSettings,
 } from "../../src/storage";
 
 const enabled = document.querySelector<HTMLInputElement>("#enabled")!;
 const preset = document.querySelector<HTMLSelectElement>("#preset")!;
-const telemetry = document.querySelector<HTMLInputElement>("#telemetry")!;
 const enabledState = document.querySelector<HTMLElement>("#enabled-state")!;
-const telemetryState = document.querySelector<HTMLElement>("#telemetry-state")!;
-const activation = document.querySelector<HTMLDetailsElement>("#activation")!;
-const invite = document.querySelector<HTMLInputElement>("#invite")!;
-const activate = document.querySelector<HTMLButtonElement>("#activate")!;
-const activationMessage = document.querySelector<HTMLElement>(
-  "#activation-message",
-)!;
-const quota = document.querySelector<HTMLElement>("#quota")!;
-const remaining = document.querySelector<HTMLElement>("#remaining")!;
 const lastOutcome = document.querySelector<HTMLElement>("#last-outcome")!;
-const consent = document.querySelector<HTMLDialogElement>("#consent")!;
-const proInterest = document.querySelector<HTMLButtonElement>("#pro-interest")!;
 const privacy = document.querySelector<HTMLAnchorElement>("#privacy")!;
 const siteAccessMessage = document.querySelector<HTMLElement>(
   "#site-access-message",
@@ -47,24 +50,26 @@ const formatExample = document.querySelector<HTMLElement>("#format-example")!;
 const copyLastOutcome =
   document.querySelector<HTMLButtonElement>("#copy-last-outcome")!;
 const copyLabel = copyLastOutcome.querySelector<HTMLElement>(".copy-label")!;
+const templateBuilder =
+  document.querySelector<HTMLElement>("#template-builder")!;
+const templateStrip =
+  document.querySelector<HTMLOListElement>("#template-strip")!;
+const templateHint = document.querySelector<HTMLElement>("#template-hint")!;
+const chipAddButtons = [
+  ...document.querySelectorAll<HTMLButtonElement>(".chip-add"),
+];
 
-const FORMAT_PREVIEWS: Record<Preset, { pattern: string; example: string }> = {
-  citation: {
-    pattern: "[Authors] ([Year])",
-    example: "Wu et al. (2021).pdf",
-  },
-  citation_title: {
-    pattern: "[Authors] ([Year]) — [Title]",
-    example: "Wu et al. (2021) — Violence against children.pdf",
-  },
-  title: {
-    pattern: "[Title]",
-    example: "Violence against children.pdf",
-  },
-  citation_gist: {
-    pattern: "[Authors] ([Year]) — [Key takeaway]",
-    example: "Wu et al. (2021) — Childhood violence shapes later health.pdf",
-  },
+/** Paper used for the live example under the format selector. */
+const SAMPLE_PAPER: PaperMetadata = {
+  title: "Violence against children",
+  authors: [
+    { name: "Zezhen Wu", familyName: "Wu" },
+    { name: "Second Author", familyName: "Author" },
+    { name: "Third Author", familyName: "Third" },
+  ],
+  year: "2021",
+  identifiers: {},
+  pdfUrls: [],
 };
 
 let currentTab: { id: number; url: string } | undefined;
@@ -74,6 +79,9 @@ let currentSiteAccess: SiteAccess = {
 };
 let latestFilename: string | undefined;
 let siteRenderVersion = 0;
+let currentPreset: Preset = "citation";
+let customTemplate: FilenameTemplate = DEFAULT_CUSTOM_TEMPLATE;
+let dragFrom: number | undefined;
 
 type SiteState = "checking" | "ready" | "warning" | "blocked" | "unavailable";
 
@@ -97,10 +105,25 @@ function setSiteStatus(
   siteActions.hidden = !showAction;
 }
 
-function renderFormatPreview(nextPreset: Preset): void {
-  const preview = FORMAT_PREVIEWS[nextPreset];
-  formatPattern.textContent = preview.pattern;
-  formatExample.textContent = preview.example;
+function renderFormatPreview(): void {
+  formatPattern.textContent = templatePattern(
+    resolveTemplate(currentPreset, customTemplate),
+  );
+  formatExample.textContent =
+    buildFilename({
+      metadata: SAMPLE_PAPER,
+      preset: currentPreset,
+      template: customTemplate,
+    }).filename ?? "—";
+}
+
+function renderTemplateHint(): void {
+  templateHint.hidden =
+    currentPreset !== "custom" ||
+    !customTemplate.some(
+      (token) =>
+        token.kind === "text" && UNSAFE_BASENAME_CHARS.test(token.value),
+    );
 }
 
 function renderToggleState(input: HTMLInputElement, state: HTMLElement): void {
@@ -109,6 +132,180 @@ function renderToggleState(input: HTMLInputElement, state: HTMLElement): void {
 
 function setSiteButtonBusy(busy: boolean): void {
   scanSite.disabled = busy;
+}
+
+function metadataCount(template: FilenameTemplate): number {
+  return template.filter((token) => token.kind !== "text").length;
+}
+
+function chipLabel(token: TemplateToken): string {
+  return token.kind === "text" ? "Text" : TOKEN_LABELS[token.kind];
+}
+
+function sizeTextInput(input: HTMLInputElement): void {
+  input.style.width = `${Math.max(3, [...input.value].length + 1)}ch`;
+}
+
+function clearDropMarkers(): void {
+  for (const chip of templateStrip.querySelectorAll(".chip")) {
+    chip.classList.remove("is-dragging", "drop-before", "drop-after");
+  }
+}
+
+async function commitTemplate(
+  next: FilenameTemplate,
+  options: { rerender: boolean; focusIndex?: number; focusInput?: boolean },
+): Promise<void> {
+  customTemplate = next;
+  if (options.rerender)
+    renderTemplateBuilder(options.focusIndex, options.focusInput);
+  renderFormatPreview();
+  renderTemplateHint();
+  await updateSettings({ customTemplate: next });
+}
+
+function reorderToken(from: number, to: number): void {
+  const next = moveToken(customTemplate, from, to);
+  if (next === customTemplate) return;
+  const target = Math.max(0, Math.min(customTemplate.length - 1, to));
+  void commitTemplate(next, { rerender: true, focusIndex: target });
+}
+
+function removeToken(index: number): void {
+  const token = customTemplate[index];
+  if (!token) return;
+  // The format must keep at least one piece of paper metadata.
+  if (token.kind !== "text" && metadataCount(customTemplate) <= 1) return;
+  const next = customTemplate.filter((_, position) => position !== index);
+  void commitTemplate(next, {
+    rerender: true,
+    focusIndex: Math.min(index, next.length - 1),
+  });
+}
+
+function onChipKeydown(event: KeyboardEvent, index: number): void {
+  // Keys typed inside a text piece or on its remove button are not commands.
+  if (event.target !== event.currentTarget) return;
+  switch (event.key) {
+    case "ArrowLeft":
+      reorderToken(index, index - 1);
+      break;
+    case "ArrowRight":
+      reorderToken(index, index + 1);
+      break;
+    case "Home":
+      reorderToken(index, 0);
+      break;
+    case "End":
+      reorderToken(index, customTemplate.length - 1);
+      break;
+    case "Delete":
+    case "Backspace":
+      removeToken(index);
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+}
+
+function renderTemplateBuilder(focusIndex?: number, focusInput = false): void {
+  templateStrip.replaceChildren();
+  const total = customTemplate.length;
+  const lastMetadataPiece = metadataCount(customTemplate) <= 1;
+
+  customTemplate.forEach((token, index) => {
+    const item = document.createElement("li");
+    item.className = "chip";
+    item.dataset.kind = token.kind;
+    item.dataset.index = String(index);
+    item.tabIndex = 0;
+    item.setAttribute(
+      "aria-label",
+      `${chipLabel(token)}, piece ${index + 1} of ${total}. Arrow keys move, Delete removes.`,
+    );
+
+    const grip = document.createElement("span");
+    grip.className = "chip-grip";
+    grip.draggable = true;
+    grip.setAttribute("aria-hidden", "true");
+    grip.textContent = "⋮⋮";
+    grip.addEventListener("dragstart", (event) => {
+      dragFrom = index;
+      event.dataTransfer?.setData("text/plain", String(index));
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      item.classList.add("is-dragging");
+    });
+    grip.addEventListener("dragend", () => {
+      dragFrom = undefined;
+      clearDropMarkers();
+    });
+    item.append(grip);
+
+    if (token.kind === "text") {
+      const input = document.createElement("input");
+      input.className = "chip-input";
+      input.type = "text";
+      input.maxLength = TEXT_TOKEN_MAX_LENGTH;
+      input.placeholder = "text";
+      input.setAttribute("aria-label", "Fixed text");
+      input.value = token.value;
+      sizeTextInput(input);
+      input.addEventListener("input", () => {
+        sizeTextInput(input);
+        // Update in place so the caret survives; indices are unchanged.
+        void commitTemplate(
+          customTemplate.map((piece, position) =>
+            position === index ? { kind: "text", value: input.value } : piece,
+          ),
+          { rerender: false },
+        );
+      });
+      item.append(input);
+    } else {
+      const label = document.createElement("span");
+      label.className = "chip-label";
+      label.textContent = TOKEN_LABELS[token.kind];
+      item.append(label);
+    }
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "chip-remove";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Remove ${chipLabel(token)}`);
+    if (token.kind !== "text" && lastMetadataPiece) {
+      remove.disabled = true;
+      remove.title = "Keep at least one of Authors, Year, or Title";
+    }
+    remove.addEventListener("click", () => removeToken(index));
+    item.append(remove);
+
+    item.addEventListener("keydown", (event) => onChipKeydown(event, index));
+    templateStrip.append(item);
+  });
+
+  const present = new Set(
+    customTemplate
+      .filter((token) => token.kind !== "text")
+      .map((token) => token.kind),
+  );
+  const full = customTemplate.length >= TEMPLATE_MAX_TOKENS;
+  for (const button of chipAddButtons) {
+    const kind = button.dataset.add;
+    button.disabled =
+      full || (kind !== "text" && present.has(kind as MetadataTokenKind));
+  }
+
+  if (focusIndex !== undefined) {
+    const chip = templateStrip.querySelector<HTMLElement>(
+      `.chip[data-index="${focusIndex}"]`,
+    );
+    (focusInput
+      ? (chip?.querySelector<HTMLInputElement>(".chip-input") ?? chip)
+      : chip
+    )?.focus();
+  }
 }
 
 async function renderSiteAccess(isEnabled = true): Promise<void> {
@@ -216,18 +413,13 @@ async function render(): Promise<void> {
   const settings = await getSettings();
   enabled.checked = settings.enabled;
   renderToggleState(enabled, enabledState);
+  currentPreset = settings.preset;
+  customTemplate = settings.customTemplate ?? DEFAULT_CUSTOM_TEMPLATE;
   preset.value = settings.preset;
-  renderFormatPreview(settings.preset);
-  telemetry.checked = settings.telemetryEnabled;
-  renderToggleState(telemetry, telemetryState);
-  activation.hidden = Boolean(settings.betaToken);
-  activation.open = !settings.betaToken && settings.preset === "citation_gist";
-  quota.hidden = !settings.betaToken;
-  remaining.textContent = String(settings.remaining ?? "—");
-  if (settings.proInterest) {
-    proInterest.textContent = "Thanks — that means a lot!";
-    proInterest.disabled = true;
-  }
+  templateBuilder.hidden = settings.preset !== "custom";
+  renderTemplateBuilder();
+  renderFormatPreview();
+  renderTemplateHint();
 
   const last = await getLastOutcome();
   latestFilename = last?.suggestion;
@@ -282,45 +474,63 @@ enabled.addEventListener("change", async () => {
   await updateSettings({ enabled: enabled.checked });
   await renderSiteAccess(enabled.checked);
 });
-telemetry.addEventListener("change", () => {
-  renderToggleState(telemetry, telemetryState);
-  void updateSettings({ telemetryEnabled: telemetry.checked });
-});
 
 preset.addEventListener("change", async () => {
   const nextPreset = preset.value as Preset;
   const settings = await getSettings();
-  if (nextPreset === "citation_gist" && !settings.gistConsent) {
-    consent.showModal();
-    const accepted = await new Promise<boolean>((resolve) => {
-      consent.addEventListener(
-        "close",
-        () => resolve(consent.returnValue === "accept"),
-        { once: true },
-      );
-    });
-    if (!accepted) {
-      preset.value = settings.preset;
-      renderFormatPreview(settings.preset);
-      return;
-    }
-    await updateSettings({ gistConsent: true });
-  }
-  await setPreset(nextPreset);
-  if (nextPreset === "citation_gist") {
-    await refreshActiveContext();
-  }
-  const updated = await getSettings();
-  if (updated.telemetryEnabled && updated.betaToken) {
-    void sendTelemetry(updated.betaToken, {
-      event: "preset_changed",
-      preset: nextPreset,
-      outcome: "selected",
-      reason: "none",
-      latencyBucket: "na",
-    }).catch(() => undefined);
-  }
+  const patch: Partial<ExtensionSettings> = { preset: nextPreset };
+  if (nextPreset === "custom" && !settings.customTemplate)
+    patch.customTemplate = DEFAULT_CUSTOM_TEMPLATE;
+  await updateSettings(patch);
   await render();
+});
+
+for (const button of chipAddButtons) {
+  button.addEventListener("click", () => {
+    const kind = button.dataset.add as MetadataTokenKind | "text" | undefined;
+    if (!kind || customTemplate.length >= TEMPLATE_MAX_TOKENS) return;
+    if (kind !== "text" && customTemplate.some((token) => token.kind === kind))
+      return;
+    const token: TemplateToken =
+      kind === "text" ? { kind: "text", value: " - " } : { kind };
+    void commitTemplate([...customTemplate, token], {
+      rerender: true,
+      focusIndex: customTemplate.length,
+      focusInput: kind === "text",
+    });
+  });
+}
+
+templateStrip.addEventListener("dragover", (event) => {
+  if (dragFrom === undefined) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  const chip = (event.target as Element).closest<HTMLElement>(".chip");
+  for (const marked of templateStrip.querySelectorAll(".chip")) {
+    marked.classList.remove("drop-before", "drop-after");
+  }
+  if (!chip || Number(chip.dataset.index) === dragFrom) return;
+  const rect = chip.getBoundingClientRect();
+  chip.classList.add(
+    event.clientX > rect.left + rect.width / 2 ? "drop-after" : "drop-before",
+  );
+});
+
+templateStrip.addEventListener("drop", (event) => {
+  if (dragFrom === undefined) return;
+  event.preventDefault();
+  const from = dragFrom;
+  dragFrom = undefined;
+  clearDropMarkers();
+  const chip = (event.target as Element).closest<HTMLElement>(".chip");
+  let insertAt = customTemplate.length;
+  if (chip) {
+    const index = Number(chip.dataset.index);
+    const rect = chip.getBoundingClientRect();
+    insertAt = event.clientX > rect.left + rect.width / 2 ? index + 1 : index;
+  }
+  // Removing the dragged piece first shifts every later position back by one.
+  reorderToken(from, from < insertAt ? insertAt - 1 : insertAt);
 });
 
 copyLastOutcome.addEventListener("click", async () => {
@@ -338,46 +548,6 @@ copyLastOutcome.addEventListener("click", async () => {
   } catch {
     copyLastOutcome.setAttribute("aria-label", "Could not copy filename");
     copyLabel.textContent = "Try again";
-  }
-});
-
-activate.addEventListener("click", async () => {
-  activate.disabled = true;
-  activationMessage.textContent = "Activating…";
-  try {
-    const result = await activateInvite(invite.value);
-    await updateSettings({
-      betaToken: result.token,
-      remaining: result.remaining,
-    });
-    invite.value = "";
-    activationMessage.textContent = "";
-    const settings = await getSettings();
-    if (settings.preset === "citation_gist") await refreshActiveContext();
-    await render();
-  } catch (error) {
-    activationMessage.textContent =
-      error instanceof Error
-        ? error.message.replaceAll("_", " ")
-        : "Activation failed";
-  } finally {
-    activate.disabled = false;
-  }
-});
-
-proInterest.addEventListener("click", async () => {
-  const settings = await getSettings();
-  await updateSettings({ proInterest: true });
-  proInterest.textContent = "Thanks — that means a lot!";
-  proInterest.disabled = true;
-  if (settings.telemetryEnabled && settings.betaToken) {
-    void sendTelemetry(settings.betaToken, {
-      event: "pro_interest",
-      preset: settings.preset,
-      outcome: "interested",
-      reason: "none",
-      latencyBucket: "na",
-    }).catch(() => undefined);
   }
 });
 

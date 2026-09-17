@@ -94,12 +94,7 @@ describe("observed SAGE article-to-reader flow", () => {
           filename: "fransen-schewel-2026.pdf",
           mime: "application/pdf",
         },
-        settings: {
-          enabled: true,
-          preset: "citation",
-          gistConsent: false,
-          telemetryEnabled: false,
-        },
+        settings: { enabled: true, preset: "citation" },
       }),
     ).toMatchObject({
       outcome: "renamed",
@@ -131,12 +126,7 @@ describe("observed SAGE article-to-reader flow", () => {
           filename: "referenced-report.pdf",
           mime: "application/pdf",
         },
-        settings: {
-          enabled: true,
-          preset: "citation",
-          gistConsent: false,
-          telemetryEnabled: false,
-        },
+        settings: { enabled: true, preset: "citation" },
       }),
     ).toMatchObject({ outcome: "unchanged" });
   });

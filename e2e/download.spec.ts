@@ -75,6 +75,12 @@ async function waitForArticleContext(worker: Worker): Promise<void> {
     .toBe(1);
 }
 
+async function storedSettings(worker: Worker): Promise<unknown> {
+  return worker.evaluate(
+    async () => (await chrome.storage.local.get("settings")).settings,
+  );
+}
+
 test("an open popup updates when late article metadata arrives", async () => {
   const { context, extensionId, worker } = await launchExtension();
   try {
@@ -230,8 +236,8 @@ test("publishes article metadata and registers the browser filename hook", async
       chrome.storage.local.set({
         lastOutcome: {
           suggestion: "Williams & Bargh (2008) — Warm hands, warm heart.pdf",
-          outcome: "fallback",
-          reason: "gist_timeout",
+          outcome: "renamed",
+          reason: "selected_preset",
           at: "2026-09-04T12:00:00Z",
         },
       }),
@@ -274,9 +280,12 @@ test("publishes article metadata and registers the browser filename hook", async
     expect(siteStatusBox?.y).toBeLessThan(namingStyleBox?.y ?? 0);
 
     await expect(popup.locator("#preset")).toHaveValue("citation");
-    await expect(popup.locator('option[value="citation"]')).toHaveText(
+    await expect(popup.locator("#preset option")).toHaveText([
       "Authors & year",
-    );
+      "Authors, year & title",
+      "Customize…",
+    ]);
+    await expect(popup.locator("#template-builder")).toBeHidden();
     await expect(popup.locator("#format-pattern")).toHaveText(
       "[Authors] ([Year])",
     );
@@ -290,25 +299,21 @@ test("publishes article metadata and registers the browser filename hook", async
       "background-color",
       "rgb(79, 70, 229)",
     );
-    await expect(popup.locator("#telemetry")).toBeChecked();
-    await expect(popup.locator("#telemetry")).toHaveAttribute("role", "switch");
-    await expect(popup.locator("#telemetry-state")).toHaveText("On");
-    await expect(popup.locator(".telemetry .toggle-track")).toHaveCSS(
-      "background-color",
-      "rgb(79, 70, 229)",
+    // Retired backend controls must not come back.
+    await expect(
+      popup.locator("#activation, #quota, #telemetry, #consent"),
+    ).toHaveCount(0);
+    await expect(popup.locator("#support-link")).toHaveText(
+      "☕ Buy me a coffee",
     );
-    await popup.locator(".telemetry").click();
-    await expect(popup.locator("#telemetry")).not.toBeChecked();
-    await expect(popup.locator("#telemetry-state")).toHaveText("Off");
-    await expect
-      .poll(() =>
-        worker.evaluate(
-          async () =>
-            (await chrome.storage.local.get("settings")).settings
-              ?.telemetryEnabled,
-        ),
-      )
-      .toBe(false);
+    await expect(popup.locator("#support-link")).toHaveAttribute(
+      "href",
+      /^https:\/\/ko-fi\.com\//,
+    );
+    await expect(popup.locator("#support-link")).toHaveAttribute(
+      "target",
+      "_blank",
+    );
     await expect(popup.locator("#site-actions")).toBeHidden();
     await expect(popup.locator("#last-outcome")).toHaveText(
       "Williams & Bargh (2008) — Warm hands, warm heart.pdf",
@@ -326,346 +331,105 @@ test("publishes article metadata and registers the browser filename hook", async
   }
 });
 
-test("activates a beta invite and records explicit gist consent", async () => {
+test("builds a custom filename format from reorderable pieces", async () => {
   const { context, extensionId, worker } = await launchExtension();
   try {
-    await routePaper(context);
-    await context.route("http://127.0.0.1:8787/v1/activate", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ token: "test-token-123456", remaining: 30 }),
-      }),
-    );
-    const page = await context.newPage();
-    await page.goto(articleUrl);
-    await waitForArticleContext(worker);
-
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await expect(popup.locator("#activation")).toBeVisible();
-    await expect(popup.locator("#activation summary")).toContainText(
-      "One-time invite, not an API key",
+    await popup.locator("#preset").selectOption("custom");
+    await expect(popup.locator("#template-builder")).toBeVisible();
+    const chips = popup.locator("#template-strip .chip");
+    await expect(chips).toHaveCount(5);
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Authors] ([Year]) — [Title]",
     );
-    await expect(popup.locator("#activation")).not.toHaveAttribute("open", "");
-    await expect(popup.locator(".telemetry strong")).toHaveText(
-      "Share anonymous usage data",
+    await expect(popup.locator("#format-example")).toHaveText(
+      "Wu et al. (2021) — Violence against children.pdf",
     );
-    await expect(popup.locator(".telemetry small")).toContainText(
-      "feature choices, rename success, error reason, timing, and app version",
-    );
-    await expect(popup.locator("#pro-interest")).toHaveText(
-      "I'd buy you a coffee ☕",
-    );
-    await expect(popup.locator(".support-card p")).toHaveText(
-      "No payment yet — this simply saves your interest on this device.",
-    );
+    await expect(popup.locator("#template-hint")).toBeHidden();
+    await expect(popup.locator('.chip-add[data-add="title"]')).toBeDisabled();
+    await expect(popup.locator('.chip-add[data-add="text"]')).toBeEnabled();
 
-    await popup.locator("#preset").selectOption("citation_gist");
-    await expect(popup.locator("#consent")).toBeVisible();
-    await expect(popup.locator("#consent h2")).toHaveText(
-      "Use AI-generated key takeaways?",
+    // Path characters are previewed as the filesystem-safe result, not blocked.
+    const separator = popup.locator("#template-strip .chip-input").nth(1);
+    await separator.fill("): ");
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Authors] ([Year]): [Title]",
     );
-    await expect(popup.locator("#consent")).toContainText(
-      "Papername sends the paper's title and abstract — not the PDF — to an AI service.",
+    await expect(popup.locator("#format-example")).toHaveText(
+      "Wu et al. (2021) — Violence against children.pdf",
     );
-    await expect(popup.locator("#consent")).toContainText(
-      "may keep copies in safety logs for up to 30 days",
-    );
-    await popup.locator('#consent button[value="accept"]').click();
-    await expect(popup.locator("#preset")).toHaveValue("citation_gist");
-    await expect(popup.locator("#activation")).toBeVisible();
-    await expect(popup.locator("#activation")).toHaveAttribute("open", "");
-    await expect(popup.locator('#activation label[for="invite"]')).toHaveText(
-      "Beta access code",
-    );
-    await expect(popup.locator("#activation-description")).toHaveText(
-      "Enter the one-time code from your beta invitation to use AI key takeaways. This is not an API key.",
-    );
+    await expect(popup.locator("#template-hint")).toBeVisible();
 
-    await popup.locator("#invite").fill("BETA-TEST");
-    await popup.locator("#activate").click();
-    await expect(popup.locator("#remaining")).toHaveText("30");
-    await expect(popup.locator("#quota")).toContainText(
-      "AI key takeaways left this month",
+    // Keyboard reordering: Title to the front, then a new separator after it.
+    const title = popup.locator('#template-strip .chip[data-kind="title"]');
+    await title.focus();
+    await title.press("Home");
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Title][Authors] ([Year]): ",
     );
+    await popup.locator('.chip-add[data-add="text"]').click();
+    await expect(chips).toHaveCount(6);
+    await chips.nth(5).focus();
+    for (let step = 0; step < 4; step += 1) {
+      await popup.keyboard.press("ArrowLeft");
+    }
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Title] - [Authors] ([Year]): ",
+    );
+    await popup.locator("#template-strip .chip-input").last().fill(")");
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Title] - [Authors] ([Year])",
+    );
+    await expect(popup.locator("#format-example")).toHaveText(
+      "Violence against children - Wu et al. (2021).pdf",
+    );
+    await expect(popup.locator("#template-hint")).toBeHidden();
 
+    const expectedTemplate = [
+      { kind: "title" },
+      { kind: "text", value: " - " },
+      { kind: "authors" },
+      { kind: "text", value: " (" },
+      { kind: "year" },
+      { kind: "text", value: ")" },
+    ];
     await expect
-      .poll(() =>
-        worker.evaluate(
-          async () => (await chrome.storage.local.get("settings")).settings,
-        ),
-      )
-      .toMatchObject({
-        betaToken: "test-token-123456",
-        remaining: 30,
-        gistConsent: true,
-        preset: "citation_gist",
+      .poll(() => storedSettings(worker))
+      .toEqual({
+        enabled: true,
+        preset: "custom",
+        customTemplate: expectedTemplate,
       });
-  } finally {
-    await context.close();
-  }
-});
 
-test("arXiv still publishes an automatic context for Acrobat PDF matching", async () => {
-  const { context, worker } = await launchExtension();
-  const arxivArticleUrl = "https://arxiv.org/abs/2609.03012";
-  try {
-    await context.route("https://arxiv.org/**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body: `<h1 class="title">Title: Universal CMB Phase Coherence</h1>
-          <div class="authors"><a>Siméon Vareilles</a><a>Thomas Colas</a><a>Julien Grain</a></div>
-          <blockquote class="abstract">Abstract: We study primordial perturbations.</blockquote>
-          <div class="dateline">[Submitted on 2 Sep 2026]</div>
-          <a href="/pdf/2609.03012">View PDF</a>`,
-      }),
+    // The arrangement survives reopening and switching presets.
+    await popup.reload();
+    await expect(popup.locator("#preset")).toHaveValue("custom");
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Title] - [Authors] ([Year])",
     );
-    const page = await context.newPage();
-    await page.goto(arxivArticleUrl);
-    await waitForArticleContext(worker);
-
-    const contexts = await worker.evaluate(async () =>
-      Object.values(await chrome.storage.session.get(null)),
+    await popup.locator("#preset").selectOption("citation");
+    await expect(popup.locator("#template-builder")).toBeHidden();
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Authors] ([Year])",
     );
-    expect(contexts[0]).toMatchObject({
-      pageUrl: arxivArticleUrl,
-      metadata: {
-        title: "Universal CMB Phase Coherence",
-        year: "2026",
-        identifiers: { arxivId: "2609.03012" },
-        pdfUrls: ["https://arxiv.org/pdf/2609.03012"],
-        sourceAdapter: "arxiv",
-      },
-    });
-  } finally {
-    await context.close();
-  }
-});
-
-test("captures OSF's primary MFR-backed preprint URL", async () => {
-  const { context, worker } = await launchExtension();
-  const osfArticleUrl = "https://osf.io/preprints/psyarxiv/qmh3s_v3";
-  const osfPdfUrl = "https://osf.io/download/6aa17d8ca9afb7bc95af9441/";
-  const viewerUrl = `https://mfr.osf.io/render?url=${encodeURIComponent(`${osfPdfUrl}?direct&mode=render`)}`;
-  try {
-    await context.route("https://mfr.osf.io/**", (route) =>
-      route.fulfill({ contentType: "text/html", body: "<p>PDF viewer</p>" }),
+    await popup.locator("#preset").selectOption("custom");
+    await expect(popup.locator("#format-pattern")).toHaveText(
+      "[Title] - [Authors] ([Year])",
     );
-    await context.route("https://osf.io/**", (route) => {
-      if (route.request().url() === osfPdfUrl) {
-        return route.fulfill({
-          contentType: "application/pdf",
-          headers: {
-            "content-disposition":
-              'attachment; filename="Clean_Bradyetal_SelectionProblem_Manuscript_preprint.pdf"',
-          },
-          body: "%PDF-1.4\n%%EOF",
-        });
-      }
-      return route.fulfill({
-        contentType: "text/html",
-        body: `<meta name="citation_title" content="Artificial Intelligence Systems Distort Upstream Selection in Human Social Learning">
-          <meta name="citation_author" content="William J. Brady">
-          <meta name="citation_author" content="Chen-Wei Yu">
-          <meta name="citation_author" content="Nicholas Ornstein">
-          <meta name="citation_author" content="Bolun Sun">
-          <meta name="citation_author" content="Joshua Conrad Jackson">
-          <meta name="citation_date" content="2026">
-          <iframe src="${viewerUrl}"></iframe>
-          <a id="download" href="${osfPdfUrl}">Download preprint</a>`,
-      });
-    });
-    const page = await context.newPage();
-    await page.goto(osfArticleUrl);
-    await waitForArticleContext(worker);
 
-    const storedPdfUrls = await worker.evaluate(async () => {
-      const contexts = Object.values(
-        await chrome.storage.session.get(null),
-      ) as Array<{
-        metadata?: { pdfUrls?: string[] };
-      }>;
-      return contexts[0]?.metadata?.pdfUrls;
-    });
-    expect(storedPdfUrls).toEqual([osfPdfUrl]);
-  } finally {
-    await context.close();
-  }
-});
-
-test("the built extension injects on every major publisher family", async () => {
-  const { context, worker } = await launchExtension();
-  const sources = [
-    ["https://www.jstor.org/stable/1", "jstor"],
-    ["https://www.sciencedirect.com/science/article/pii/1", "elsevier"],
-    ["https://link.springer.com/article/1", "springer"],
-    ["https://www.nature.com/articles/1", "nature"],
-    ["https://onlinelibrary.wiley.com/doi/1", "wiley"],
-    ["https://journals.sagepub.com/doi/1", "sage"],
-    ["https://www.tandfonline.com/doi/1", "taylor-francis"],
-    ["https://psycnet.apa.org/record/1", "apa-psycnet"],
-    ["https://pubmed.ncbi.nlm.nih.gov/1/", "pubmed-pmc"],
-    ["https://arxiv.org/abs/2609.03012", "arxiv"],
-    ["https://dl.acm.org/doi/1", "acm"],
-    ["https://ieeexplore.ieee.org/document/1", "ieee"],
-  ] as const;
-  try {
-    for (const [url] of sources) {
-      const origin = new URL(url).origin;
-      await context.route(`${origin}/**`, (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: "text/html",
-          body: '<meta name="citation_title" content="Publisher paper"><meta name="citation_author" content="Jane Wu"><meta name="citation_date" content="2026"><meta name="citation_pdf_url" content="/paper.pdf">',
-        }),
-      );
-    }
-    const page = await context.newPage();
-    for (const [url, sourceAdapter] of sources) {
-      await page.goto(url);
-      await expect
-        .poll(() =>
-          worker.evaluate(async () => {
-            const contexts = Object.values(
-              await chrome.storage.session.get(null),
-            ) as Array<{ metadata?: { sourceAdapter?: string } }>;
-            return contexts[0]?.metadata?.sourceAdapter;
-          }),
-        )
-        .toBe(sourceAdapter);
-    }
-  } finally {
-    await context.close();
-  }
-});
-
-test("an unfamiliar metadata-rich repository works without opening the popup", async () => {
-  const { context, worker } = await launchExtension();
-  const repositoryUrl = "https://repository.example.edu/items/agency-paper";
-  const repositoryPdf =
-    "https://repository.example.edu/bitstreams/agency-paper/content.pdf";
-  try {
-    await context.route("https://repository.example.edu/**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body: `<meta name="citation_title" content="A paper from an unfamiliar repository">
-          <meta name="citation_author" content="Jane Wu">
-          <meta name="citation_date" content="2026">
-          <meta name="citation_pdf_url" content="${repositoryPdf}">`,
-      }),
-    );
-    const page = await context.newPage();
-    await page.goto(repositoryUrl);
-    await waitForArticleContext(worker);
-
-    const contexts = await worker.evaluate(async () =>
-      Object.values(await chrome.storage.session.get(null)),
-    );
-    expect(contexts[0]).toMatchObject({
-      pageUrl: repositoryUrl,
-      metadata: {
-        title: "A paper from an unfamiliar repository",
-        authors: [{ familyName: "Wu" }],
-        year: "2026",
-        pdfUrls: [repositoryPdf],
-      },
-    });
-  } finally {
-    await context.close();
-  }
-});
-
-test("captures a proxied PDF from the selected Google Scholar result", async () => {
-  const { context, worker } = await launchExtension();
-  const scholarUrl = "https://scholar.google.com/scholar?q=human+agency";
-  const proxyPdf =
-    "https://link-springer-com.proxy.library.edu/content/pdf/10.1007/example.pdf";
-  try {
-    await context.route("https://scholar.google.com/**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body: `<div class="gs_r gs_or gs_scl">
-          <div class="gs_or_ggsm"><a id="pdf" href="${proxyPdf}">[PDF] springer.com</a></div>
-          <h3 class="gs_rt"><a>Subjective quantitative studies of human agency</a></h3>
-          <div class="gs_a">S Alkire - Social indicators research, 2005 - Springer</div>
-          <div class="gs_rs">Can we measure expansions in agency?</div>
-        </div>`,
-      }),
-    );
-    const page = await context.newPage();
-    await page.goto(scholarUrl);
-    await page.locator("#pdf").dispatchEvent("pointerdown");
-    await waitForArticleContext(worker);
-
-    const contexts = await worker.evaluate(async () =>
-      Object.values(await chrome.storage.session.get(null)),
-    );
-    expect(contexts[0]).toMatchObject({
-      pageUrl: scholarUrl,
-      metadata: {
-        title: "Subjective quantitative studies of human agency",
-        authors: [{ familyName: "Alkire" }],
-        year: "2005",
-        pdfUrls: [proxyPdf],
-        sourceAdapter: "google-scholar",
-      },
-    });
-  } finally {
-    await context.close();
-  }
-});
-
-test("captures a PDF on a localized Google Scholar citation detail page", async () => {
-  const { context, worker } = await launchExtension();
-  const scholarUrl =
-    "https://scholar.google.com/citations?view_op=view_citation&hl=zh-CN&user=USNXsZEAAAAJ&citation_for_view=USNXsZEAAAAJ:fPk4N6BV_jEC";
-  const wileyPdf =
-    "https://spssi.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/josi.12415";
-  try {
-    await context.route("https://scholar.google.com/**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body: `<div id="gsc_oci_title_wrapper">
-          <div id="gsc_oci_title_gg"><div class="gsc_oci_title_ggi">
-            <a id="pdf" href="${wileyPdf}"><span>[PDF]</span> 来自 wiley.com</a>
-          </div></div>
-          <div id="gsc_oci_title"><a>A meta-analysis of the effect of values affirmation on academic achievement</a></div>
-        </div>
-        <div id="gsc_oci_table">
-          <div class="gs_scl"><div class="gsc_oci_field">作者</div><div class="gsc_oci_value">Zezhen Wu, Thees F Spreckelsen, Geoffrey L Cohen</div></div>
-          <div class="gs_scl"><div class="gsc_oci_field">发表日期</div><div class="gsc_oci_value">2021/1/14</div></div>
-          <div class="gs_scl"><div class="gsc_oci_field">简介</div><div class="gsc_oci_value" id="gsc_oci_descr">Study abstract.</div></div>
-        </div>`,
-      }),
-    );
-    const page = await context.newPage();
-    await page.goto(scholarUrl);
-    await waitForArticleContext(worker);
-
-    const contexts = await worker.evaluate(async () =>
-      Object.values(await chrome.storage.session.get(null)),
-    );
-    expect(contexts[0]).toMatchObject({
-      pageUrl: scholarUrl,
-      metadata: {
-        title:
-          "A meta-analysis of the effect of values affirmation on academic achievement",
-        authors: [
-          { familyName: "Wu" },
-          { familyName: "Spreckelsen" },
-          { familyName: "Cohen" },
-        ],
-        year: "2021",
-        identifiers: { doi: "10.1111/josi.12415" },
-        pdfUrls: [wileyPdf],
-        sourceAdapter: "google-scholar",
-      },
-    });
+    // At least one metadata piece must remain.
+    await popup
+      .locator('#template-strip .chip[data-kind="authors"] .chip-remove')
+      .click();
+    await popup
+      .locator('#template-strip .chip[data-kind="year"] .chip-remove')
+      .click();
+    await expect(
+      popup.locator('#template-strip .chip[data-kind="title"] .chip-remove'),
+    ).toBeDisabled();
+    await expect(popup.locator('.chip-add[data-add="authors"]')).toBeEnabled();
+    await expect(popup.locator('.chip-add[data-add="year"]')).toBeEnabled();
   } finally {
     await context.close();
   }

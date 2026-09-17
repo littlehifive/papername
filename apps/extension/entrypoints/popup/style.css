@@ -133,7 +133,7 @@ button:active:not(:disabled) {
 
 button:focus-visible,
 a:focus-visible,
-summary:focus-visible {
+.chip:focus-visible {
   border-radius: 6px;
   outline: 3px solid #4f46e54d;
   outline-offset: 2px;
@@ -163,15 +163,6 @@ button:disabled {
 
 .secondary:hover:not(:disabled) {
   background: #dfe5ed;
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-}
-
-.row button {
-  width: auto;
 }
 
 .field-help {
@@ -241,69 +232,6 @@ button:disabled {
 
 .toggle-state {
   min-width: 18px;
-}
-
-.activation-card {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 11px;
-  margin: 12px 0;
-  overflow: hidden;
-}
-
-.activation-card summary {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  list-style: none;
-  padding: 10px 12px;
-}
-
-.activation-card summary::-webkit-details-marker {
-  display: none;
-}
-
-.activation-card summary::after {
-  color: #92400e;
-  content: "›";
-  font-size: 18px;
-  line-height: 1;
-  transform: rotate(90deg);
-  transition: transform 120ms ease;
-}
-
-.activation-card[open] summary::after {
-  transform: rotate(-90deg);
-}
-
-.activation-card summary strong,
-.activation-card summary small {
-  display: block;
-}
-
-.activation-card summary strong {
-  color: #78350f;
-  font-size: 12px;
-}
-
-.activation-card summary small {
-  color: #92652a;
-  font-size: 10.5px;
-  margin-top: 1px;
-}
-
-.activation-content {
-  border-top: 1px solid #fde68a;
-  padding: 10px 12px 12px;
-}
-
-.activation-content label {
-  color: #78350f;
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 5px;
 }
 
 .status-heading {
@@ -478,6 +406,151 @@ button:disabled {
   font-weight: 500;
 }
 
+.template-builder {
+  margin-top: 9px;
+}
+
+.template-builder .field-help {
+  margin: 0 0 6px;
+}
+
+.template-strip {
+  background: var(--surface-subtle);
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  min-height: 44px;
+  padding: 8px;
+}
+
+.chip {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11.5px;
+  gap: 3px;
+  padding: 3px 4px 3px 5px;
+}
+
+.chip[data-kind="authors"],
+.chip[data-kind="year"],
+.chip[data-kind="title"] {
+  background: var(--accent-soft);
+  border-color: #c7d2fe;
+  color: #2f356f;
+  font-weight: 650;
+}
+
+.chip[data-kind="text"] {
+  background: #fff;
+  color: #344054;
+}
+
+.chip.is-dragging {
+  opacity: 0.5;
+}
+
+.chip.drop-before {
+  box-shadow: -3px 0 0 var(--accent);
+}
+
+.chip.drop-after {
+  box-shadow: 3px 0 0 var(--accent);
+}
+
+.chip-grip {
+  color: #9aa3b5;
+  cursor: grab;
+  font-size: 10px;
+  letter-spacing: -2px;
+  line-height: 1;
+  user-select: none;
+}
+
+.chip-grip:active {
+  cursor: grabbing;
+}
+
+.chip-label {
+  padding: 0 2px;
+}
+
+/* Nested selectors outrank the base `input:not([type="checkbox"])` rule. */
+.chip .chip-input {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  color: inherit;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11.5px;
+  height: 20px;
+  line-height: 18px;
+  min-height: 0;
+  padding: 0 3px;
+  white-space: pre;
+  width: auto;
+}
+
+.chip .chip-input:hover {
+  background: #f1f3f7;
+  border-color: transparent;
+}
+
+.chip .chip-input:focus {
+  background: #fff;
+  box-shadow: 0 0 0 2px #4f46e54d;
+  outline: none;
+}
+
+.chip-remove {
+  background: transparent;
+  border-radius: 50%;
+  color: #6b728f;
+  font-size: 14px;
+  height: 18px;
+  line-height: 1;
+  padding: 0;
+  width: 18px;
+}
+
+.chip-remove:hover:not(:disabled) {
+  background: #e3e7ef;
+  color: #b42318;
+}
+
+.chip-remove:disabled {
+  opacity: 0.35;
+}
+
+.template-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip-add {
+  background: #e9edf3;
+  color: #344054;
+  font-size: 11px;
+  padding: 5px 8px;
+}
+
+.chip-add:hover:not(:disabled) {
+  background: #dfe5ed;
+}
+
+.template-hint {
+  color: #92400e;
+  margin: 8px 0 0;
+}
+
 .site-actions {
   margin-top: 10px;
 }
@@ -485,19 +558,6 @@ button:disabled {
 .site-actions button {
   font-size: 12px;
   padding: 8px 9px;
-}
-
-#quota {
-  align-items: center;
-  color: var(--text-muted);
-  display: flex;
-  font-size: 11px;
-  justify-content: space-between;
-  padding: 0 2px;
-}
-
-#quota strong {
-  color: var(--text);
 }
 
 .latest-result {
@@ -545,38 +605,6 @@ button:disabled {
   width: 7px;
 }
 
-.telemetry {
-  align-items: flex-start;
-  cursor: pointer;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  margin: 12px 0;
-}
-
-.telemetry-copy,
-.telemetry-copy strong,
-.telemetry-copy small {
-  display: block;
-}
-
-.telemetry-copy strong {
-  color: #344054;
-  font-size: 12px;
-}
-
-.telemetry-copy small {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 450;
-  line-height: 1.42;
-  margin-top: 3px;
-}
-
-.telemetry .toggle {
-  margin-top: 0;
-}
-
 .support-card {
   align-items: center;
   background: #eef1f5;
@@ -601,16 +629,22 @@ button:disabled {
 
 .support-card .secondary {
   background: #fff;
+  border-radius: 9px;
   box-shadow: 0 1px 2px #17203312;
+  color: #344054;
+  display: inline-block;
   font-size: 11px;
+  font-weight: 650;
   padding: 8px 9px;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
   width: auto;
 }
 
-.message {
-  color: #b42318;
-  font-size: 12px;
-  margin-top: 6px;
+.support-card .secondary:hover {
+  background: #dfe5ed;
+  color: #344054;
 }
 
 footer {
@@ -629,35 +663,6 @@ a {
 
 a:hover {
   color: var(--accent-strong);
-}
-
-dialog {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 18px 60px #17203338;
-  color: var(--text);
-  max-width: 330px;
-  padding: 20px;
-}
-
-dialog::backdrop {
-  background: #17203370;
-}
-
-dialog p {
-  color: var(--text-muted);
-  margin-top: 9px;
-}
-
-.dialog-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-
-.dialog-actions button {
-  width: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

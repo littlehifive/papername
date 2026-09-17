@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildFilename,
+  formatCreator,
+  formatYear,
   sanitizeBasename,
+  type FilenameTemplate,
   type PaperMetadata,
 } from "../src/index";
 
@@ -20,6 +23,23 @@ const paper: PaperMetadata = {
   pdfUrls: [],
 };
 
+const colonTemplate: FilenameTemplate = [
+  { kind: "authors" },
+  { kind: "text", value: " (" },
+  { kind: "year" },
+  { kind: "text", value: "): " },
+  { kind: "title" },
+];
+
+const titleFirstTemplate: FilenameTemplate = [
+  { kind: "title" },
+  { kind: "text", value: " - " },
+  { kind: "authors" },
+  { kind: "text", value: " (" },
+  { kind: "year" },
+  { kind: "text", value: ")" },
+];
+
 describe("download filename", () => {
   it("uses an APA-like citation label by default", () => {
     expect(buildFilename({ metadata: paper, preset: "citation" })).toEqual({
@@ -29,25 +49,11 @@ describe("download filename", () => {
     });
   });
 
-  it.each([
-    [
-      "citation_title",
-      undefined,
+  it("renders the citation_title preset", () => {
+    expect(
+      buildFilename({ metadata: paper, preset: "citation_title" }).filename,
+    ).toBe(
       "Williams et al. (2008) — Holding warm coffee increases perceived interpersonal warmth.pdf",
-    ],
-    [
-      "title",
-      undefined,
-      "Holding warm coffee increases perceived interpersonal warmth.pdf",
-    ],
-    [
-      "citation_gist",
-      "Warm objects increase perceived interpersonal warmth",
-      "Williams et al. (2008) — Warm objects increase perceived interpersonal warmth.pdf",
-    ],
-  ] as const)("renders the %s preset", (preset, gist, expected) => {
-    expect(buildFilename({ metadata: paper, preset, gist }).filename).toBe(
-      expected,
     );
   });
 
@@ -83,17 +89,16 @@ describe("download filename", () => {
     });
   });
 
-  it("falls back from gist to citation plus title without an abstract", () => {
+  it("falls back to the citation when the title is missing", () => {
     expect(
       buildFilename({
-        metadata: { ...paper, abstract: undefined },
-        preset: "citation_gist",
+        metadata: { ...paper, title: "  " },
+        preset: "citation_title",
       }),
     ).toEqual({
-      filename:
-        "Williams et al. (2008) — Holding warm coffee increases perceived interpersonal warmth.pdf",
+      filename: "Williams et al. (2008).pdf",
       outcome: "fallback",
-      reason: "missing_abstract",
+      reason: "missing_metadata",
     });
   });
 
@@ -104,6 +109,135 @@ describe("download filename", () => {
         preset: "citation",
       }),
     ).toEqual({ outcome: "unchanged", reason: "missing_metadata" });
+  });
+});
+
+describe("custom filename template", () => {
+  it("renders pieces in order and sanitizes a colon in fixed text", () => {
+    expect(
+      buildFilename({
+        metadata: paper,
+        preset: "custom",
+        template: colonTemplate,
+      }),
+    ).toEqual({
+      filename:
+        "Williams et al. (2008) — Holding warm coffee increases perceived interpersonal warmth.pdf",
+      outcome: "renamed",
+      reason: "selected_preset",
+    });
+  });
+
+  it("supports a title-first arrangement", () => {
+    expect(
+      buildFilename({
+        metadata: paper,
+        preset: "custom",
+        template: titleFirstTemplate,
+      }).filename,
+    ).toBe(
+      "Holding warm coffee increases perceived interpersonal warmth - Williams et al. (2008).pdf",
+    );
+  });
+
+  it("renders n.d. for a missing year", () => {
+    expect(
+      buildFilename({
+        metadata: { ...paper, year: undefined },
+        preset: "custom",
+        template: colonTemplate,
+      }).filename,
+    ).toBe(
+      "Williams et al. (n.d.) — Holding warm coffee increases perceived interpersonal warmth.pdf",
+    );
+  });
+
+  it("falls back to the title instead of a half-rendered template when authors are missing", () => {
+    expect(
+      buildFilename({
+        metadata: { ...paper, authors: [] },
+        preset: "custom",
+        template: titleFirstTemplate,
+      }),
+    ).toEqual({
+      filename:
+        "Holding warm coffee increases perceived interpersonal warmth.pdf",
+      outcome: "fallback",
+      reason: "missing_author",
+    });
+  });
+
+  it("falls back to the citation when a title-only template has no title", () => {
+    expect(
+      buildFilename({
+        metadata: { ...paper, title: "" },
+        preset: "custom",
+        template: [{ kind: "title" }],
+      }),
+    ).toEqual({
+      filename: "Williams et al. (2008).pdf",
+      outcome: "fallback",
+      reason: "missing_metadata",
+    });
+  });
+
+  it.each([
+    ["an undefined template", undefined],
+    ["an empty template", []],
+    ["a text-only template", [{ kind: "text", value: "paper" }]],
+  ] as const)("uses authors, year and title for %s", (_label, template) => {
+    expect(
+      buildFilename({
+        metadata: paper,
+        preset: "custom",
+        template: template as FilenameTemplate | undefined,
+      }),
+    ).toEqual({
+      filename:
+        "Williams et al. (2008) — Holding warm coffee increases perceived interpersonal warmth.pdf",
+      outcome: "renamed",
+      reason: "selected_preset",
+    });
+  });
+
+  it("collapses whitespace-only text pieces", () => {
+    expect(
+      buildFilename({
+        metadata: paper,
+        preset: "custom",
+        template: [
+          { kind: "title" },
+          { kind: "text", value: "   " },
+          { kind: "year" },
+        ],
+      }).filename,
+    ).toBe(
+      "Holding warm coffee increases perceived interpersonal warmth 2008.pdf",
+    );
+  });
+});
+
+describe("citation pieces", () => {
+  it("formats the creator by author count and keeps corporate names verbatim", () => {
+    expect(formatCreator(paper)).toBe("Williams et al.");
+    expect(
+      formatCreator({ ...paper, authors: paper.authors.slice(0, 1) }),
+    ).toBe("Williams");
+    expect(
+      formatCreator({
+        ...paper,
+        authors: [{ name: "World Health Organization", corporate: true }],
+      }),
+    ).toBe("World Health Organization");
+    expect(formatCreator({ ...paper, authors: [{ name: "  " }] })).toBe(
+      undefined,
+    );
+  });
+
+  it("formats the year with an n.d. placeholder", () => {
+    expect(formatYear(paper)).toBe("2008");
+    expect(formatYear({ ...paper, year: undefined })).toBe("n.d.");
+    expect(formatYear({ ...paper, year: " " })).toBe("n.d.");
   });
 });
 

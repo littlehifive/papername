@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Work is tracked locally in Markdown for this solo beta; do not create or mutate external GitHub issues unless explicitly requested. See `docs/agents/issue-tracker.md`.
+Work is tracked locally in Markdown for this solo project; do not create or mutate external GitHub issues unless explicitly requested. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -17,6 +17,6 @@ This repository uses a single root `CONTEXT.md` and root-level ADRs. See `docs/a
 ## Development
 
 - Use `pnpm` for dependency and script management.
-- Test behavior at public seams: filename generation, extension-visible state, and Worker HTTP endpoints.
-- Keep paper content out of application logs, telemetry, and persistent server storage.
+- Test behavior at public seams: filename generation, settings normalization, and extension-visible popup state.
+- Keep paper content out of application logs and persistent storage; the extension has no backend.
 - Run `pnpm check` before committing.

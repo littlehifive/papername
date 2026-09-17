@@ -1,11 +1,16 @@
-export const PRESETS = [
-  "citation",
-  "citation_title",
-  "title",
-  "citation_gist",
-] as const;
+export const PRESETS = ["citation", "citation_title", "custom"] as const;
 
 export type Preset = (typeof PRESETS)[number];
+
+export const METADATA_TOKEN_KINDS = ["authors", "year", "title"] as const;
+
+export type MetadataTokenKind = (typeof METADATA_TOKEN_KINDS)[number];
+
+export type TemplateToken =
+  { kind: MetadataTokenKind } | { kind: "text"; value: string };
+
+/** Ordered pieces that are concatenated, then sanitized, to form a basename. */
+export type FilenameTemplate = TemplateToken[];
 
 export interface PaperAuthor {
   name: string;
@@ -31,12 +36,7 @@ export interface PaperMetadata {
 
 export type RenameReason =
   | "selected_preset"
-  | "missing_abstract"
   | "missing_author"
-  | "gist_unavailable"
-  | "gist_timeout"
-  | "quota_exhausted"
-  | "invalid_gist"
   | "missing_metadata"
   | "unmatched_download";
 
