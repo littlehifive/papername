@@ -1,18 +1,12 @@
-import type { ArticleContext, Preset } from "@papername/core";
+import type { ArticleContext } from "@papername/core";
 import { browser } from "wxt/browser";
 
-import type { DownloadDecision, ExtensionSettings } from "./decision";
+import type { DownloadDecision } from "./decision";
+import { normalizeSettings, type ExtensionSettings } from "./settings";
 
 const SETTINGS_KEY = "settings";
 const CONTEXT_KEY_PREFIX = "articleContext:";
 const LAST_OUTCOME_KEY = "lastOutcome";
-
-export const DEFAULT_SETTINGS: ExtensionSettings = {
-  enabled: true,
-  preset: "citation",
-  gistConsent: false,
-  telemetryEnabled: true,
-};
 
 export interface LastOutcome extends DownloadDecision {
   at: string;
@@ -20,10 +14,7 @@ export interface LastOutcome extends DownloadDecision {
 
 export async function getSettings(): Promise<ExtensionSettings> {
   const stored = await browser.storage.local.get(SETTINGS_KEY);
-  return {
-    ...DEFAULT_SETTINGS,
-    ...((stored[SETTINGS_KEY] as Partial<ExtensionSettings> | undefined) ?? {}),
-  };
+  return normalizeSettings(stored[SETTINGS_KEY]);
 }
 
 export async function updateSettings(
@@ -31,10 +22,6 @@ export async function updateSettings(
 ): Promise<void> {
   const current = await getSettings();
   await browser.storage.local.set({ [SETTINGS_KEY]: { ...current, ...patch } });
-}
-
-export async function setPreset(preset: Preset): Promise<void> {
-  await updateSettings({ preset });
 }
 
 export async function getContexts(): Promise<ArticleContext[]> {

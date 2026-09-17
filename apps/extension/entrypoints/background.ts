@@ -5,17 +5,14 @@ import type {
 } from "@papername/core";
 import { isLikelyPdfDownload } from "@papername/core";
 
-import { latencyBucket, requestGist, sendTelemetry } from "../src/backend";
 import { mergePaperMetadata } from "../src/context";
 import { decideDownload } from "../src/decision";
-import { enrichMetadata } from "../src/enrichment";
 import {
   getContexts,
   getSettings,
   removeContext,
   saveContext,
   saveLastOutcome,
-  updateSettings,
 } from "../src/storage";
 import { attachTrustedViewerUrl, isAdobeAcrobatDownload } from "../src/viewer";
 
@@ -41,32 +38,10 @@ async function decideAndRecord(
   download: DownloadCandidate,
   contexts: ArticleContext[],
 ) {
-  const startedAt = performance.now();
   const settings = await getSettings();
-  const decision = await decideDownload({
-    contexts,
-    download,
-    settings,
-    requestGist: settings.betaToken
-      ? (metadata, signal) => requestGist(metadata, settings.betaToken!, signal)
-      : undefined,
-  });
-  if (typeof decision.remaining === "number")
-    await updateSettings({ remaining: decision.remaining });
+  const decision = decideDownload({ contexts, download, settings });
   if (decision.reason !== "disabled") {
-    await saveLastOutcome({
-      ...decision,
-      at: new Date().toISOString(),
-    });
-    if (settings.telemetryEnabled && settings.betaToken) {
-      void sendTelemetry(settings.betaToken, {
-        event: "rename_result",
-        preset: settings.preset,
-        outcome: decision.outcome,
-        reason: decision.reason,
-        latencyBucket: latencyBucket(performance.now() - startedAt),
-      }).catch(() => undefined);
-    }
+    await saveLastOutcome({ ...decision, at: new Date().toISOString() });
   }
   return decision;
 }
@@ -80,33 +55,12 @@ export default defineBackground(() => {
       const prior = (await getContexts()).find(
         (item) => item.tabId === tabId && item.pageUrl === message.pageUrl,
       );
-      const context: ArticleContext = {
+      await saveContext({
         metadata: mergePaperMetadata(message.metadata, prior?.metadata),
         pageUrl: message.pageUrl,
         capturedAt: Date.now(),
         tabId,
-      };
-      await saveContext(context);
-      const settings = await getSettings();
-      if (
-        settings.preset === "citation_gist" &&
-        settings.gistConsent &&
-        settings.betaToken
-      ) {
-        const metadata = await enrichMetadata(context.metadata);
-        const current = (await getContexts()).find(
-          (item) => item.tabId === tabId,
-        );
-        if (
-          metadata !== context.metadata &&
-          current?.pageUrl === context.pageUrl
-        ) {
-          await saveContext({
-            ...current,
-            metadata: mergePaperMetadata(current.metadata, metadata),
-          });
-        }
-      }
+      });
     })();
   });
 

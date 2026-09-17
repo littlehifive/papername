@@ -55,11 +55,36 @@
         <select id="preset">
           <option value="citation">Authors &amp; year</option>
           <option value="citation_title">Authors, year &amp; title</option>
-          <option value="title">Full title</option>
-          <option value="citation_gist">
-            Authors, year &amp; key takeaway
-          </option>
+          <option value="custom">Customize…</option>
         </select>
+        <div id="template-builder" class="template-builder" hidden>
+          <p class="field-help">
+            Drag pieces to reorder. Spaces and punctuation go in text pieces.
+          </p>
+          <ol
+            id="template-strip"
+            class="template-strip"
+            aria-label="Filename pieces"
+          ></ol>
+          <div class="template-add" role="group" aria-label="Add a piece">
+            <button type="button" class="chip-add" data-add="authors">
+              + Authors
+            </button>
+            <button type="button" class="chip-add" data-add="year">
+              + Year
+            </button>
+            <button type="button" class="chip-add" data-add="title">
+              + Title
+            </button>
+            <button type="button" class="chip-add" data-add="text">
+              + Text
+            </button>
+          </div>
+          <p id="template-hint" class="field-help template-hint" hidden>
+            Filenames can't contain \ / : * ? " &lt; &gt; |. Papername replaces
+            them with a dash; the example shows the real result.
+          </p>
+        </div>
         <div class="format-preview" aria-live="polite">
           <div class="format-preview-row">
             <span>Format</span>
@@ -70,36 +95,6 @@
             <strong id="format-example">Wu et al. (2021).pdf</strong>
           </div>
         </div>
-      </section>
-
-      <details id="activation" class="activation-card" hidden>
-        <summary>
-          <span>
-            <strong>Have a beta access code?</strong>
-            <small>One-time invite, not an API key</small>
-          </span>
-        </summary>
-        <div class="activation-content">
-          <label for="invite">Beta access code</label>
-          <p id="activation-description" class="field-help">
-            Enter the one-time code from your beta invitation to use AI key
-            takeaways. This is not an API key.
-          </p>
-          <div class="row">
-            <input
-              id="invite"
-              autocomplete="off"
-              placeholder="Enter invite code"
-            />
-            <button id="activate" type="button">Unlock</button>
-          </div>
-          <p id="activation-message" class="message"></p>
-        </div>
-      </details>
-
-      <section id="quota" hidden>
-        <span>AI key takeaways left this month</span>
-        <strong id="remaining">—</strong>
       </section>
 
       <section class="card status latest-result">
@@ -119,41 +114,21 @@
         <p id="last-outcome">No eligible PDF handled yet.</p>
       </section>
 
-      <label class="card telemetry" for="telemetry">
-        <span class="telemetry-copy">
-          <strong>Share anonymous usage data</strong>
-          <small id="telemetry-description">
-            When on, Papername sends feature choices, rename success, error
-            reason, timing, and app version after beta activation. Never paper
-            titles, abstracts, filenames, or websites. Turn it off any time.
-          </small>
-        </span>
-        <span class="toggle">
-          <input
-            id="telemetry"
-            type="checkbox"
-            role="switch"
-            aria-describedby="telemetry-description"
-          />
-          <span class="toggle-track" aria-hidden="true">
-            <span class="toggle-thumb"></span>
-          </span>
-          <span id="telemetry-state" class="toggle-state" aria-hidden="true"
-            >On</span
-          >
-        </span>
-      </label>
-
       <section class="support-card">
         <div>
           <strong>Enjoying Papername?</strong>
           <p>
-            No payment yet — this simply saves your interest on this device.
+            Papername is free. If it saves you time, you can buy me a coffee.
           </p>
         </div>
-        <button id="pro-interest" class="secondary" type="button">
-          I'd buy you a coffee ☕
-        </button>
+        <a
+          id="support-link"
+          class="secondary"
+          href="https://ko-fi.com/papername"
+          target="_blank"
+          rel="noopener"
+          >☕ Buy me a coffee</a
+        >
       </section>
 
       <footer>
@@ -165,29 +140,6 @@
         >
       </footer>
     </main>
-
-    <dialog id="consent">
-      <form method="dialog">
-        <h2>Use AI-generated key takeaways?</h2>
-        <p>
-          To create a short takeaway for the filename, Papername sends the
-          paper's title and abstract — not the PDF — to an AI service.
-        </p>
-        <p>
-          Papername does not store this content. The AI provider does not use
-          API data for training by default, but may keep copies in safety logs
-          for up to 30 days.
-        </p>
-        <p>
-          If the title or abstract is missing, Papername may use the paper's DOI
-          to retrieve those details from Crossref.
-        </p>
-        <div class="dialog-actions">
-          <button value="cancel" class="secondary">Not now</button>
-          <button value="accept">Enable key takeaways</button>
-        </div>
-      </form>
-    </dialog>
 
     <script type="module" src="./main.ts"></script>
   </body>

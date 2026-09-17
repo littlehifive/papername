@@ -1,5 +1,8 @@
+import { hasMetadataToken, isTemplate, PRESET_TEMPLATES } from "./template";
 import type {
   FilenameResult,
+  FilenameTemplate,
+  MetadataTokenKind,
   PaperAuthor,
   PaperMetadata,
   Preset,
@@ -20,22 +23,25 @@ function familyName(author: PaperAuthor): string {
   return parts.at(-1) ?? name;
 }
 
-export function formatCitation(metadata: PaperMetadata): string | undefined {
+/** `Wu`, `Wu & Bargh`, or `Wu et al.`; undefined when no author is usable. */
+export function formatCreator(metadata: PaperMetadata): string | undefined {
   const authors = metadata.authors.filter(
     (author) => author.name.trim().length > 0,
   );
   if (authors.length === 0) return undefined;
+  if (authors.length === 1) return familyName(authors[0]!);
+  if (authors.length === 2)
+    return `${familyName(authors[0]!)} & ${familyName(authors[1]!)}`;
+  return `${familyName(authors[0]!)} et al.`;
+}
 
-  let creator: string;
-  if (authors.length === 1) {
-    creator = familyName(authors[0]!);
-  } else if (authors.length === 2) {
-    creator = `${familyName(authors[0]!)} & ${familyName(authors[1]!)}`;
-  } else {
-    creator = `${familyName(authors[0]!)} et al.`;
-  }
+export function formatYear(metadata: PaperMetadata): string {
+  return metadata.year?.trim() || "n.d.";
+}
 
-  return `${creator} (${metadata.year ?? "n.d."})`;
+export function formatCitation(metadata: PaperMetadata): string | undefined {
+  const creator = formatCreator(metadata);
+  return creator ? `${creator} (${formatYear(metadata)})` : undefined;
 }
 
 function truncateAtWord(value: string, maximum: number): string {
@@ -77,69 +83,55 @@ function resultForBasename(
 export interface BuildFilenameInput {
   metadata: PaperMetadata;
   preset: Preset;
-  gist?: string;
-  gistFailure?: Exclude<
-    RenameReason,
-    | "selected_preset"
-    | "missing_author"
-    | "missing_metadata"
-    | "unmatched_download"
-  >;
+  /** Used only when `preset` is `custom`. */
+  template?: FilenameTemplate;
+}
+
+export function resolveTemplate(
+  preset: Preset,
+  template?: FilenameTemplate,
+): FilenameTemplate {
+  if (preset !== "custom") return PRESET_TEMPLATES[preset];
+  return isTemplate(template) && hasMetadataToken(template)
+    ? template
+    : PRESET_TEMPLATES.citation_title;
 }
 
 export function buildFilename({
   metadata,
   preset,
-  gist,
-  gistFailure,
+  template,
 }: BuildFilenameInput): FilenameResult {
   const title = metadata.title.trim() || undefined;
+  const creator = formatCreator(metadata);
+  const year = formatYear(metadata);
+  const missing = new Set<MetadataTokenKind>();
+
+  const rendered = resolveTemplate(preset, template)
+    .map((token) => {
+      switch (token.kind) {
+        case "text":
+          return token.value;
+        case "year":
+          return year;
+        case "authors":
+          if (!creator) missing.add("authors");
+          return creator ?? "";
+        case "title":
+          if (!title) missing.add("title");
+          return title ?? "";
+      }
+    })
+    .join("");
+
+  if (missing.size === 0)
+    return resultForBasename(rendered, "renamed", "selected_preset");
+
+  // Never emit a half-rendered template; fall back to the most useful whole piece.
   const citation = formatCitation(metadata);
-
-  if (preset === "title")
-    return resultForBasename(title, "renamed", "selected_preset");
-
-  if (preset === "citation") {
-    return citation
-      ? resultForBasename(citation, "renamed", "selected_preset")
-      : resultForBasename(
-          title,
-          title ? "fallback" : "unchanged",
-          title ? "missing_author" : "missing_metadata",
-        );
-  }
-
-  if (preset === "citation_title") {
-    if (citation && title)
-      return resultForBasename(
-        `${citation} — ${title}`,
-        "renamed",
-        "selected_preset",
-      );
-    return resultForBasename(
-      title ?? citation,
-      "fallback",
-      citation ? "missing_metadata" : "missing_author",
-    );
-  }
-
-  if (gist && citation)
-    return resultForBasename(
-      `${citation} — ${gist}`,
-      "renamed",
-      "selected_preset",
-    );
-  if (citation && title) {
-    return resultForBasename(
-      `${citation} — ${title}`,
-      "fallback",
-      gistFailure ??
-        (metadata.abstract ? "gist_unavailable" : "missing_abstract"),
-    );
-  }
   return resultForBasename(
     title ?? citation,
     "fallback",
-    citation ? "missing_metadata" : "missing_author",
+    missing.has("authors") ? "missing_author" : "missing_metadata",
   );
 }
